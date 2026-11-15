@@ -1,0 +1,128 @@
+# Using pacommon in a tool
+
+pacommon is source, not a library. A tool's `Makefile` compiles the files it calls and links the
+objects into its own binary, so the linker keeps only what is used.
+
+```make
+PACOMMON ?= ../pacommon
+CFLAGS   += -I$(PACOMMON)/src
+COMMON_SRCS = $(PACOMMON)/src/config_file.c $(PACOMMON)/src/fontfind.c
+COMMON_OBJS = $(COMMON_SRCS:$(PACOMMON)/src/%.c=build/pacommon_%.o)
+
+build/pacommon_%.o: $(PACOMMON)/src/%.c
+	$(CC) $(ALL_CFLAGS) -DPACOMMON_I18N='"i18n.h"' -c $< -o $@
+```
+
+`-DPACOMMON_I18N='"i18n.h"'` is only for a tool that translates its messages: `config_file.c`
+then includes the tool's `i18n.h` for `_()`. Without it messages stay in English. `config_file.h`
+also honours `-DSYSCONFDIR='"/etc"'` for a distribution that keeps system settings elsewhere.
+
+`tunables.h` holds every size, limit and default, which can be changed with `-DNAME=value` when
+building ([development.md](development.md)). `compiler.h` is a header only: three macros for compiler hints, to be used where a profile says so
+([development.md](development.md#performance-hints)).
+
+## pac.mk: installing
+
+A tool's `Makefile` includes `$(PACOMMON)/pac.mk` and installs what it needs to work out of the box
+with `$(call pac_install_keep,SOURCE,DESTINATION,MODE)`, and `$(pac_install_shared_conf)` for
+`pac.conf`. A file that is already there is kept, with a warning if it differs, and
+`make install REPLACE=1` replaces it and saves the old one as `NAME.bak.DATE`. `make uninstall`
+removes a file only if it is still the one that was installed. See [development.md](development.md).
+
+## config_file: the settings file
+
+```c
+static bool handler(const char *key, const char *value, void *data) {
+    Options *o = data;
+    if (strcmp(key, "text_scale") == 0) return parse_scale(value, &o->text_scale);
+    return false;                      /* unknown key: reported and skipped */
+}
+
+Options o = defaults();                /* every setting has a default */
+pac_config_load("pacpeek", handler, &o);
+/* ...then command-line options, which override the files */
+```
+
+- The handler returns `false` for an unknown key or a bad value. `config_file` prints
+  `prog: path:line: ignoring "key = value"` on stderr and goes on. It never aborts.
+- Lines are `key = value`. `#` starts a comment anywhere on a line, so a value cannot contain
+  `#`. Only the first `=` splits, so `url = a=b` works. Spaces around the key and value are
+  dropped. A line over 1023 bytes, or with a NUL byte in it, is skipped whole.
+- The file must be a regular file of at most 64 KiB (`PAC_CONFIG_MAX_SIZE`). A pipe, a device, a
+  folder or a larger file is reported and ignored, and the tool starts anyway. Text from the file
+  is shown with control characters replaced by `?` when it is reported.
+- `pac_config_load_file` reads one file and returns how many lines were skipped, or `-1` if it is
+  missing or cannot be used. A missing file is normal and silent; the other reasons are reported.
+- `pac_config_path` gives the path of one location, for a tool that reads the files itself (for
+  example to watch them or to check who owns them).
+
+A tool that calls `pac_config_load` gets `pac.conf` first (see
+[configuration.md](configuration.md)). A tool that reads its files itself calls
+`pac_config_load_shared(prog, handler, data)` before its own: the handler is given only the shared
+keys with sane values, and its refusal of one is silent.
+
+The files are read in this order, each overriding the earlier. The handler is called for every
+line of every file, so the last call for a key wins.
+
+| # | Path |
+| --- | --- |
+| 0 | `/etc/pac/<tool>.conf` |
+| 1 | `$XDG_CONFIG_HOME/pac/<tool>.conf`, or `~/.config/pac/<tool>.conf` |
+| 2 | `./<tool>.conf` |
+
+## setting: settings read where they are needed
+
+For a tool whose code would otherwise call `getenv()` in many places. The values come from the
+settings file and never from the environment.
+
+```c
+pac_config_load("pacreact", pac_setting_store, NULL);   /* keep every key */
+const char *font = pac_setting("font");                 /* NULL if not set */
+```
+
+`pac_setting_set(key, NULL)` unsets a key, and `pac_setting_clear()` frees everything. The pointer
+from `pac_setting` is valid until the next change to any setting. The store is meant for a few dozen settings. The store is one block of `PAC_SETTING_POOL` bytes (4,096 by
+default, no allocation): a key of at most 63 bytes, a value of at most 1023, and what fits in the
+block. Anything beyond that is refused (`false`) and what is stored stays as it was.
+
+## fontfind: finding a font file
+
+```c
+FontDirs dirs;
+font_dirs_init(&dirs);                       /* XDG_DATA_HOME, ~/.fonts, XDG_DATA_DIRS */
+const char *names[] = { "DejaVuSans.ttf", "LiberationSans-Regular.ttf", NULL };
+char path[256];
+if (!font_find(dirs.list, names, path, sizeof path)) { /* say so once, use the fallback */ }
+```
+
+The earliest name in `names` wins wherever it is found, and the search stops as soon as the first
+name is found. Symbolic links are followed. Unreadable files are ignored. Only absolute directories are used: a relative `$XDG_DATA_HOME` or `$XDG_DATA_DIRS` entry is
+ignored. `font_find` keeps its
+state in statics, so it is **not thread-safe**.
+
+## field: a line of text for a password or a prompt
+
+`Field` holds up to `FIELD_MAX - 1` bytes of UTF-8 that are only edited at the end.
+
+- `field_append_key` remembers the key (an evdev code) and modifiers that typed each character, so
+  `field_retype` can type the same keys again after a keyboard layout change. Text that did not
+  come from one key (`field_append`, a compose sequence) is left alone.
+- Malformed UTF-8 is kept byte by byte. It is never read past its end.
+- `field_backspace` and `field_clear` use `explicit_bzero`, so a password does not stay in memory.
+  The caller must call `field_clear` when it is done with a field and must not copy it around.
+- Appends fail, leaving the field unchanged, when the text does not fit.
+- A `Field` is checked on use: if its length, count or end no longer agree (it was written to
+  directly, or never initialized) it is wiped rather than trusted, and `field_retype` returns
+  `false`. A translate callback that does not end its text is not read past its buffer.
+
+## palette: the colors every tool shares
+
+```c
+#include "palette.h"
+const PacPalette *p = high_contrast ? &PAC_PALETTE_HIGH : &PAC_PALETTE_NORMAL;
+```
+
+`PAC_PALETTE_NORMAL` and `PAC_PALETTE_HIGH` are the two looks of principle 33 (a calm palette, and
+black and white with nothing dimmed). A tool uses them instead of its own colors so that every
+tool matches. `pac_contrast` is the WCAG ratio; `pac_palette_contrast_ok` and
+`pac_palette_meanings_apart` are the checks the tests run.

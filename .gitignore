@@ -1,0 +1,7 @@
+build/
+*.o
+*.d
+core
+vgcore.*
+.cache/
+compile_commands.json
