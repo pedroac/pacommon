@@ -41,3 +41,13 @@ endef
 define pac_install_shared_conf
 $(call pac_install_keep,$(PACOMMON)/pac.conf,$(DESTDIR)$(SYSCONFDIR)/pac/pac.conf,644)
 endef
+
+# Speech (speech.c): SPEECH=speechd (default) speaks through speech-dispatcher, SPEECH=none links no
+# speech library. A tool adds $(PAC_SPEECH_CFLAGS) to its compiler flags (every file, speech.c too)
+# and $(PAC_SPEECH_PKGS) to the packages it asks pkg-config for.
+SPEECH ?= speechd
+ifeq ($(filter $(SPEECH),none speechd),)
+$(error SPEECH=$(SPEECH) is not supported: use none or speechd)
+endif
+PAC_SPEECH_CFLAGS = $(if $(filter speechd,$(SPEECH)),-DSPEECH_SPEECHD)
+PAC_SPEECH_PKGS = $(if $(filter speechd,$(SPEECH)),speech-dispatcher)

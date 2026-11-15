@@ -85,7 +85,7 @@ variable, `0`/`none` compiles the feature out, nothing is detected automatically
 
 | Variable | Values | Effect |
 | --- | --- | --- |
-| `SPEECH` | `none`, `speechd` (default), `atspi` | Speech through libspeechd or libatspi, or none |
+| `SPEECH` | `none`, `speechd` (default), `atspi` | Speech through libspeechd or libatspi, or none. `speech.c` and `pac.mk` implement `none` and `speechd`; `atspi` is refused until it exists |
 | `BRAILLE` | `0` (default), `1` | Braille output with liblouis, for tools that print |
 | `I18N` | `0`, `1` | Translated messages (gettext, HarfBuzz, FriBidi) |
 | `PREFIX`, `SYSCONFDIR`, `LOCALEDIR` | paths | Where things are installed and looked for |

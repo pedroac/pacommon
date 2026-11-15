@@ -34,6 +34,9 @@ checks are in `tests/test.c`.
 
 ## Speech
 
+The shared code is `speech.[ch]` (see [using.md](using.md#speech-speaking-what-the-screen-shows)); it implements `speechd`. The tool decides what is spoken.
+It has been tested with speech-dispatcher (see [platform.md](platform.md#what-has-been-tested)).
+
 `speechd` talks to the speech-dispatcher server, so the tool says what it wants spoken: a small
 dependency, and the right one when the tool knows what to say. `atspi` is the accessibility bus
 that Orca reads: the tool would describe its interface to it, which is more work and more memory

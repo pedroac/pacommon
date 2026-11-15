@@ -5,6 +5,7 @@
 #include "fontfind.h"
 #include "palette.h"
 #include "setting.h"
+#include "speech.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -743,6 +744,35 @@ static void test_palette(void) {
     CHECK(!pac_palette_meanings_apart(&bad, why, sizeof why));
 }
 
+static void test_speech(void) {
+    char code[32];
+    speech_language_code("pt_BR.UTF-8", code, sizeof(code)); CHECK_STR(code, "pt-BR");
+    speech_language_code("pt_BR:pt", code, sizeof(code)); CHECK_STR(code, "pt-BR");
+    speech_language_code("en@euro", code, sizeof(code)); CHECK_STR(code, "en");
+    speech_language_code("C", code, sizeof(code)); CHECK_STR(code, "");
+    speech_language_code("POSIX", code, sizeof(code)); CHECK_STR(code, "");
+    speech_language_code("", code, sizeof(code)); CHECK_STR(code, "");
+    speech_language_code(NULL, code, sizeof(code)); CHECK_STR(code, "");
+    char tiny[4];
+    speech_language_code("pt_BR", tiny, sizeof(tiny)); CHECK_STR(tiny, "pt-");   /* cut, never overrun */
+    speech_language_code("pt", tiny, 0);                                         /* size 0: untouched */
+
+    /* The tool's own language first, then the environment in the order of gettext's. */
+    unsetenv("LANGUAGE"); unsetenv("LC_ALL"); unsetenv("LC_MESSAGES"); unsetenv("LANG");
+    CHECK_STR(speech_locale(NULL), "");
+    setenv("LANG", "fr_FR", 1); CHECK_STR(speech_locale(""), "fr_FR");
+    setenv("LC_MESSAGES", "de_DE", 1); CHECK_STR(speech_locale(NULL), "de_DE");
+    setenv("LC_ALL", "es_ES", 1); CHECK_STR(speech_locale(NULL), "es_ES");
+    setenv("LANGUAGE", "pt_BR:pt", 1); CHECK_STR(speech_locale(NULL), "pt_BR:pt");
+    CHECK_STR(speech_locale("it"), "it");
+    unsetenv("LANGUAGE"); unsetenv("LC_ALL"); unsetenv("LC_MESSAGES"); unsetenv("LANG");
+
+    /* Without a backend, or with no server, nothing is spoken and nothing breaks. */
+    speech_say("hello");   /* not open */
+    speech_say(NULL);
+    speech_close();
+}
+
 int main(void) {
     snprintf(tmp, sizeof tmp, "/tmp/pacommon-test-XXXXXX");
     if (!mkdtemp(tmp)) { perror("mkdtemp"); return 2; }
@@ -766,6 +796,7 @@ int main(void) {
     test_field_guards();
     test_fontfind_guards();
     test_palette();
+    test_speech();
     test_random_input();
 
     remove_tree(tmp);

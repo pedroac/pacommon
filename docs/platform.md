@@ -23,6 +23,9 @@ container (`tests/distros.sh docker.io/library/alpine:latest` for one). Update t
 from its output, with the date. A distribution that fails is a bug to fix here, or a limit to
 write in the next section.
 
+Speech (`SPEECH=speechd`) has been tested by the author with speech-dispatcher 0.12.1, on Arch Linux. Other
+speech-dispatcher versions and distributions are *untested*; `SPEECH=atspi` does not exist yet.
+
 ## What the code assumes
 
 - **`explicit_bzero`** (`field.c`) needs glibc 2.25 or musl 1.1.20. It is how a password is wiped,

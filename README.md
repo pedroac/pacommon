@@ -15,6 +15,7 @@ Not a library to install: each tool's `Makefile` compiles the files it needs fro
 | `src/tunables.h` | Every size, limit and default, changeable with `-DNAME=value` | all |
 | `src/compiler.h` | `PAC_LIKELY`, `PAC_UNLIKELY`, `PAC_COLD` for GCC and Clang, for code a profile shows is hot | any |
 | `src/field.[ch]` | A line of text edited at its end, remembering which key typed each character | pacgreet, paclock |
+| `src/speech.[ch]` | Speaks what a tool shows, through speech-dispatcher (`SPEECH=speechd`), or nothing (`SPEECH=none`) | paclock |
 | `src/palette.[ch]` | The colors every tool shares (normal and high contrast), with the checks of principle 33 | pacgreet, paclock |
 
 ## Build and test

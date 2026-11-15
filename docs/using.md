@@ -115,6 +115,30 @@ state in statics, so it is **not thread-safe**.
   directly, or never initialized) it is wiped rather than trusted, and `field_retype` returns
   `false`. A translate callback that does not end its text is not read past its buffer.
 
+## speech: speaking what the screen shows
+
+```make
+include $(PACOMMON)/pac.mk                      # SPEECH=speechd (default) or none
+PKGS += $(PAC_SPEECH_PKGS)                      # speech-dispatcher, or nothing
+ALL_CFLAGS += $(PAC_SPEECH_CFLAGS)              # -DSPEECH_SPEECHD, or nothing; for speech.c too
+COMMON_SRCS += $(PACOMMON)/src/speech.c
+```
+
+```c
+#include "speech.h"
+bool speaking = speech_open("paclock", settings.language);   // before anything that must not wait
+speech_say("Authentication failed");                         // cuts off what is still being said
+speech_close();
+```
+
+The tool decides what is spoken and when; this only talks to the server. Speak only what is also on
+the screen, and never a password or what is typed. `speech_open` returns false (and says so once on
+stderr, translated like `config_file.c`'s messages) if the server cannot be reached: the tool goes
+on in silence. Without `-DSPEECH_SPEECHD` every function does nothing and no library is needed.
+`speech_locale` and `speech_language_code` give the language for the server from the tool's
+`language` setting or the environment. Reading the `speech` setting is the tool's job (it is in the
+shared `pac.conf` keys). `SPEECH=atspi` is not implemented: `pac.mk` refuses it.
+
 ## palette: the colors every tool shares
 
 ```c

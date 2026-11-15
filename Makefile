@@ -16,7 +16,7 @@ ALL_CFLAGS := $(CFLAGS) $(GUARD_CFLAGS) -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -f
               -fstack-clash-protection $(CET_CFLAGS) -fPIE -MMD -MP -Isrc
 ALL_LDFLAGS := $(LDFLAGS) -Wl,--as-needed -pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack
 
-SRCS = $(addprefix src/,config_file.c field.c fontfind.c palette.c setting.c)
+SRCS = $(addprefix src/,config_file.c field.c fontfind.c palette.c setting.c speech.c)
 OBJS = $(SRCS:src/%.c=build/%.o)
 
 all: $(OBJS)
