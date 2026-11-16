@@ -26,6 +26,10 @@ bool speech_open(const char *tool, const char *language);
 /* Says text now, cutting off whatever is still being said. Nothing if it is empty or speech is
  * not open. */
 void speech_say(const char *text);
+/* Waits until what is being said has ended, but at most timeout_ms milliseconds. Returns at once
+ * if nothing is being said or speech is not open. Call it before speech_close, which would cut
+ * the speech off. */
+void speech_finish(int timeout_ms);
 /* Closes the connection. Safe to call when it is not open. */
 void speech_close(void);
 

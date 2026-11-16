@@ -28,6 +28,11 @@ typedef bool (*PacConfigHandler)(const char *key, const char *value, void *data)
  * does not exist is silent; the other reasons are reported. */
 int pac_config_load_file(const char *prog, const char *path, PacConfigHandler handler, void *data);
 
+/* A yes/no setting: yes, true, on or 1; no, false, off or 0, in any case. `out` (may be NULL) gets the value;
+ * false for anything else, and `out` is then left alone. The shared keys are checked with it, and a tool reads its
+ * own yes/no settings with it, so that a value the shared check accepts is one the tool accepts too. */
+bool pac_config_bool(const char *value, bool *out);
+
 /* The settings that every pac tool has in common (docs/configuration.md) can be set once, in
  * pac.conf, which is looked for in the same three places as <prog>.conf. */
 #define PAC_SHARED_CONFIG "pac"

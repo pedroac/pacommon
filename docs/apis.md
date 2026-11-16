@@ -49,8 +49,8 @@ stable (or staging) and which compositors have it before depending on it.
 | --- | --- | --- | --- |
 | Cairo | drawing | 1.18.6 | https://www.cairographics.org/manual/ |
 | FreeType | font files | 2.15.0 | https://freetype.org/freetype2/docs/reference/index.html |
-| HarfBuzz | shaping text (translated builds) | 14.6.0 | https://harfbuzz.github.io/ |
-| FriBidi | right-to-left text (translated builds) | 1.0.17 | https://github.com/fribidi/fribidi |
+| HarfBuzz | shaping text (translated builds): `textlayout.c` uses `hb_ft_face_create_referenced`, `hb_buffer_*`, `hb_shape` and `hb_unicode_general_category` / `hb_unicode_script` | 14.6.0 | https://harfbuzz.github.io/ (`/usr/include/harfbuzz/hb-ft.h`) |
+| FriBidi | right-to-left text (translated builds): `textlayout.c` uses `fribidi_get_bidi_types`, `fribidi_get_bracket_types`, `fribidi_get_par_direction`, `fribidi_get_par_embedding_levels_ex` | 1.0.17 | https://github.com/fribidi/fribidi (`/usr/include/fribidi/fribidi-bidi.h`) |
 | xkbcommon | keyboard layouts | not checked | https://xkbcommon.org/doc/current/ |
 | PAM (libpam) | paclock's login | 1.7.3 | `/usr/include/security/pam_appl.h`, `man pam_start`, https://linux-pam.org/ |
 | libinput | pacland's input | not checked | https://wayland.freedesktop.org/libinput/doc/latest/ |

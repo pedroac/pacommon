@@ -40,6 +40,42 @@
 #define PAC_TEXT_SCALE_MAX 2.5
 #endif
 
+/* A length with a unit (length.c): the largest value one may have, and the dots per inch an
+ * output may report before it is not believed (96 is then assumed). */
+#ifndef PAC_LENGTH_MAX
+#define PAC_LENGTH_MAX 100000.0
+#endif
+/* The text size limits a person sets (text_size_min, text_size_max) are held between these, in
+ * millimetres: a maximum under the floor, or a minimum over the ceiling, is taken as a mistake and
+ * not as a wish (docs/configuration.md). */
+#ifndef PAC_TEXT_MM_FLOOR
+#define PAC_TEXT_MM_FLOOR 2.0
+#endif
+#ifndef PAC_TEXT_MM_CEILING
+#define PAC_TEXT_MM_CEILING 40.0
+#endif
+#ifndef PAC_DPI_MIN
+#define PAC_DPI_MIN 50.0
+#endif
+#ifndef PAC_DPI_MAX
+#define PAC_DPI_MAX 600.0
+#endif
+#ifndef PAC_DPI_DEFAULT
+#define PAC_DPI_DEFAULT 96.0
+#endif
+
+/* textlayout.c: the most characters of one line it lays out, the most glyphs it gives back (a few
+ * characters can become more than one glyph), and the fonts it keeps shaping data for. */
+#ifndef PAC_TEXT_CHARS_MAX
+#define PAC_TEXT_CHARS_MAX 256
+#endif
+#ifndef PAC_TEXT_GLYPHS_MAX
+#define PAC_TEXT_GLYPHS_MAX 320
+#endif
+#ifndef PAC_TEXT_FONTS_MAX
+#define PAC_TEXT_FONTS_MAX 16
+#endif
+
 /* ---- setting ---- */
 
 /* Settings are kept in one block of this many bytes, with no allocation: each takes its key, its
@@ -84,6 +120,13 @@ _Static_assert(PAC_CONFIG_MAX_LINE >= 63 && PAC_CONFIG_MAX_LINE < PAC_CONFIG_MAX
 _Static_assert(PAC_CONFIG_PATH_MAX >= 64, "PAC_CONFIG_PATH_MAX is too small for a path");
 _Static_assert(PAC_TEXT_SCALE_MIN > 0 && PAC_TEXT_SCALE_MAX > PAC_TEXT_SCALE_MIN,
                "the text scale range is wrong");
+_Static_assert(PAC_LENGTH_MAX > 0 && PAC_DPI_MIN > 0 && PAC_DPI_MAX > PAC_DPI_MIN &&
+               PAC_DPI_DEFAULT >= PAC_DPI_MIN && PAC_DPI_DEFAULT <= PAC_DPI_MAX,
+               "the length limits are wrong");
+_Static_assert(PAC_TEXT_MM_FLOOR > 0 && PAC_TEXT_MM_CEILING > PAC_TEXT_MM_FLOOR,
+               "the text size sanity range is wrong");
+_Static_assert(PAC_TEXT_CHARS_MAX >= 16 && PAC_TEXT_GLYPHS_MAX >= PAC_TEXT_CHARS_MAX && PAC_TEXT_FONTS_MAX >= 2,
+               "the text layout limits are too small");
 _Static_assert(PAC_SETTING_KEY_MAX >= 1 && PAC_SETTING_VALUE_MAX >= 0 &&
                PAC_SETTING_POOL >= PAC_SETTING_KEY_MAX + PAC_SETTING_VALUE_MAX + 2,
                "PAC_SETTING_POOL must hold at least one setting of the largest size");

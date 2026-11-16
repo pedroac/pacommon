@@ -55,28 +55,62 @@ pacgreet, `remember_user = no`).
 
 ## Keys that mean the same everywhere
 
-A tool that has the feature uses these names and values. The last three are not yet used by any
+A tool that has the feature uses these names and values. `braille_table` is not yet used by any
 tool.
 
 | Key | Values | Default | Meaning |
 | --- | --- | --- | --- |
 | `contrast` | `normal`, `high` | `normal` | High contrast: black and white, nothing dimmed |
 | `text_scale` | 0.5 to 2.5 | `1.0` | Size of all text, as a multiple of the default |
+| `text_size_min`, `text_size_max` | a number and a unit: `mm`, `in`, `pt`, `px` or `%` | none | The smallest and largest the tool's smallest text may be, such as `3mm` |
 | `font` | a font name | the tool's own | The font for text |
 | `language` | a locale such as `pt_BR` | from `LANG` | Language of messages |
 | `icons` | `auto`, `theme`, `0` | the tool's own | The icon set |
 | `theme` | a name | the tool's own | The color scheme, for tools that have more than one |
 | `speech` | `yes`, `no` | `yes` (when built with speech) | Speak focus, changes and messages |
-| `low_memory` | `yes`, `no` | `no` | Trade speed or looks for less memory: no caches, no extras |
+| `resources` | `normal`, `low`, `minimal` | `normal` | How much memory and work the tool may use: fewer extras, smaller images |
+| `privacy` | `normal`, `medium`, `high`, `paranoid` | `normal` | How much the tool shows, or leaks, about the person and the session |
+| `low_memory` | `yes`, `no` | `no` | The older name of `resources = low` |
 | `braille_table` | a liblouis table name | from `language` | Braille table, for tools that print |
 
 `speech` and `braille_table` do nothing in a build without `SPEECH` or `BRAILLE`, and nothing in a
 tool that does not have the feature: the option is accepted and ignored silently, so that one file
-works with every build. No tool implements `low_memory` yet: the build options below are what
-remove the optional features today, and a tool that adds a runtime trade-off reads it.
+works with every build. The convenient behavior is the default; a tool with a runtime trade-off reads `resources` to turn
+off what costs memory or speed (principle 57).
 
-The convenient behavior is the default; a tool with a runtime trade-off reads `low_memory = yes` to
-turn off what costs memory or speed (principle 57).
+### Levels, text sizes and what wins
+
+`resources` has three levels and `privacy` four, each in order (a higher privacy level includes the
+ones before it). `pacommon` defines the names and the rules
+below; **each tool says, in its README and example `<tool>.conf`, what each level does**, and a
+higher level never does less than a lower one. `low_memory = yes` is `resources = low`, and `no` is
+`normal`. A level is a default: the tool's own settings still decide what the person set.
+
+1. **The accessibility settings are not levels' to change.** `contrast`, `speech`, `text_scale`,
+   `text_size_min` and `text_size_max` are never turned off or overridden by `resources` or
+   `privacy`. What is spoken may say less (`privacy` may leave out the user name), but a result the
+   person needs (a refused password, a failed action) is never left unspoken.
+2. **What wins, strongest first:** the command line, `<tool>.conf`, `pac.conf`, the level's
+   defaults, the tool's own defaults.
+3. **The size limits beat every base size.** A tool has its own base sizes, and `resources =
+   minimal` may make them smaller, but the smallest text is held between `text_size_min` and
+   `text_size_max` whatever the base. A person who needs text of at least 3 mm gets it even when
+   that makes the tool use more memory than the level means.
+4. **Two things win over the limits.** A maximum under `PAC_TEXT_MM_FLOOR` (2 mm) or a minimum over
+   `PAC_TEXT_MM_CEILING` (40 mm), both in `tunables.h`, is a mistake and is pulled to that bound.
+   And a tool may keep its window or card inside the screen: unreadable text is worse than text that
+   is smaller than asked for, but a card that does not fit is worse still. A tool says so when it
+   does this. If the minimum is above the maximum, the minimum wins.
+5. **Privacy prevails over resources.** The two levels can ask for opposite things: `privacy =
+   medium` makes a tool run programs (to pause the players, to mute the sound), and `resources =
+   minimal` wants the tool to do the least. The privacy level wins. A person sets a higher
+   privacy because it matters to them, and it can be a company policy: the tool uses what that
+   level needs, extra memory, processes and time included, and `resources` only lowers what is
+   left. A tool says in its README what each privacy level costs, and a test keeps a privacy
+   feature from depending on `resources`.
+6. **`mm`, `in` and `pt` are real sizes** (`length.h` turns them into pixels with the size the
+   output reports, and 96 dpi where it does not say or says nonsense); `px` is logical pixels,
+   which are not a real size; `%` is of what the tool says (the screen's shorter side).
 
 ## Build options
 

@@ -3,15 +3,18 @@
 #include "config_file.h"
 #include "field.h"
 #include "fontfind.h"
+#include "length.h"
 #include "palette.h"
 #include "setting.h"
 #include "speech.h"
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <locale.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -407,6 +410,18 @@ static const char *last_value(const struct shared_seen *s, const char *key) {
     return found;
 }
 
+static void test_config_bool(void) {
+    bool v = false;
+    const char *yes[] = { "yes", "true", "on", "1", "Yes", "TRUE", "On" };
+    const char *no[] = { "no", "false", "off", "0", "No", "FALSE", "Off" };
+    for (size_t i = 0; i < sizeof yes / sizeof yes[0]; i++) { v = false; CHECK(pac_config_bool(yes[i], &v) && v); }
+    for (size_t i = 0; i < sizeof no / sizeof no[0]; i++) { v = true; CHECK(pac_config_bool(no[i], &v) && !v); }
+    v = true;
+    CHECK(!pac_config_bool("maybe", &v) && v);                       /* refused: untouched */
+    CHECK(!pac_config_bool("", &v) && !pac_config_bool("yess", &v) && !pac_config_bool("2", &v) && v);
+    CHECK(pac_config_bool("yes", NULL) && !pac_config_bool("maybe", NULL));   /* only checking */
+}
+
 static void test_config_shared(void) {
     CHECK(pac_config_shared_key("text_scale") && pac_config_shared_key("braille_table"));
     CHECK(!pac_config_shared_key("window_width") && !pac_config_shared_key("") && !pac_config_shared_key(NULL));
@@ -419,7 +434,9 @@ static void test_config_shared(void) {
     snprintf(dir, sizeof dir, "%s/home2/pac/pac.conf", tmp);
     write_file(dir, "font = Shared Sans\ntext_scale = 1.5\nspeech = yes\nlanguage = pt_BR\n"
                     "window_width = 100\ncontrast = high\ncontrast = yes\nlow_memory = maybe\n"
-                    "text_scale_x = 2\n");
+                    "text_scale_x = 2\n"
+                    "privacy = medium\ntext_size_min = 3mm\ntext_size_max = big\nresources = low\nprivacy = extreme\n"
+                    "text_size_max = 0.5in\nresources = minimal\nprivacy = 2\n");
     snprintf(dir, sizeof dir, "%s/home2/pac/tool.conf", tmp);
     write_file(dir, "font = Own Serif\nwindow_width = 200\n");
     snprintf(dir, sizeof dir, "%s/work2", tmp);
@@ -438,6 +455,10 @@ static void test_config_shared(void) {
     CHECK_STR(last_value(&s, "contrast"), "high");         /* normal/high; "yes" is refused */
     CHECK_STR(last_value(&s, "window_width"), "200");      /* from tool.conf only: not shared */
     CHECK(s.count > 0 && strcmp(s.keys[0], "font") == 0 && strcmp(s.values[0], "Shared Sans") == 0);   /* first */
+    CHECK_STR(last_value(&s, "text_size_min"), "3mm");     /* a length with a unit */
+    CHECK_STR(last_value(&s, "text_size_max"), "0.5in");   /* "big" is refused, the later line stands */
+    CHECK_STR(last_value(&s, "resources"), "minimal");     /* the three levels... */
+    CHECK_STR(last_value(&s, "privacy"), "medium");        /* ...four for privacy; extreme and 2 are refused */
     CHECK(s.refused == 1);                                 /* speech was offered, and refused silently */
     for (int i = 0; i < s.count; i++) {                    /* not shared, or a bad value: never delivered */
         CHECK(strcmp(s.keys[i], "low_memory") != 0 && strcmp(s.keys[i], "text_scale_x") != 0);
@@ -459,9 +480,11 @@ static void test_config_shared(void) {
 static void test_pac_conf_example(void) {
     FILE *f = fopen("pac.conf", "r");
     if (!f) { fprintf(report, "FAIL pac.conf not found (run from the pacommon folder)\n"); failures++; return; }
-    static const char *const keys[] = { "contrast", "text_scale", "font", "language", "icons", "theme",
-                                        "speech", "low_memory", "braille_table" };
-    int seen[9] = { 0 }, lines = 0;
+    static const char *const keys[] = { "contrast", "text_scale", "text_size_min", "text_size_max", "font",
+                                        "language", "icons", "theme", "speech", "resources", "privacy",
+                                        "low_memory", "braille_table" };
+    enum { KEYS = sizeof keys / sizeof keys[0] };
+    int seen[KEYS] = { 0 }, lines = 0;
     char line[512], out[300];
     char dir[300], cwd[300];
     snprintf(dir, sizeof dir, "%s/home3", tmp);
@@ -476,21 +499,21 @@ static void test_pac_conf_example(void) {
         if (sscanf(line + 1, "%39[a-z_] =", key) != 1) continue;
         fputs(line + 1, o);
         lines++;
-        for (int i = 0; i < 9; i++) if (strcmp(key, keys[i]) == 0) seen[i]++;
+        for (int i = 0; i < KEYS; i++) if (strcmp(key, keys[i]) == 0) seen[i]++;
     }
     fclose(f);
     fclose(o);
-    CHECK(lines == 9);
-    for (int i = 0; i < 9; i++) CHECK(seen[i] == 1 && pac_config_shared_key(keys[i]));
+    CHECK(lines == KEYS);
+    for (int i = 0; i < KEYS; i++) CHECK(seen[i] == 1 && pac_config_shared_key(keys[i]));
 
-    /* Read as the shared file of a tool, whose values are checked first: all nine get through. */
+    /* Read as the shared file of a tool, whose values are checked first: all of them get through. */
     snprintf(dir, sizeof dir, "%s/home3", tmp);
     setenv("XDG_CONFIG_HOME", dir, 1);
     snprintf(dir, sizeof dir, "%s/home3/pac", tmp);   /* a folder with no pac.conf in it to stand in */
     if (!getcwd(cwd, sizeof cwd) || chdir(dir) != 0) { perror("chdir"); exit(2); }
     struct shared_seen s = { .count = 0 };
     pac_config_load_shared("t", collect_shared_example, &s);
-    CHECK(s.count >= 9);                           /* a system pac.conf, if there is one, may add */
+    CHECK(s.count >= KEYS);                          /* a system pac.conf, if there is one, may add */
     if (chdir(cwd) != 0) exit(2);
 }
 
@@ -715,6 +738,77 @@ static void remove_tree(const char *path) {
     if (system(cmd) != 0) fprintf(report, "could not remove %s\n", path);
 }
 
+static void test_length(void) {
+    PacLength l;
+
+    CHECK(pac_length_parse("12px", &l) && l.value == 12 && l.unit == PAC_LENGTH_PX);
+    CHECK(pac_length_parse("3.5 MM", &l) && l.value == 3.5 && l.unit == PAC_LENGTH_MM);
+    CHECK(pac_length_parse("0.25in", &l) && l.value == 0.25 && l.unit == PAC_LENGTH_IN);
+    CHECK(pac_length_parse(".5pt", &l) && l.value == 0.5 && l.unit == PAC_LENGTH_PT);
+    CHECK(pac_length_parse("40%", &l) && l.value == 40 && l.unit == PAC_LENGTH_PERCENT);
+    l = (PacLength){ 7, PAC_LENGTH_PX };
+    const char *bad[] = { "", "12", "px", "mm", "-3mm", "+3mm", "0mm", "nanmm", "infmm", "1e999mm", "1e9mm",
+                          "3 m", "3mmm", "3mm x", "3%%", "3\tmm", "0x10px", "1e1mm", "1.2.3mm", " 3mm", NULL };
+    for (int i = 0; bad[i]; i++) CHECK(!pac_length_parse(bad[i], &l));
+    CHECK(!pac_length_parse(NULL, &l));
+    CHECK(l.value == 7 && l.unit == PAC_LENGTH_PX);   /* untouched by every refusal */
+
+    /* A 3840x2160 panel of 600 mm at scale 2: 6.4 buffer pixels per mm, 3.2 logical. */
+    CHECK(pac_px_per_mm(600, 3840, 2) == 3.2);
+    /* Nothing believable: 96 dpi, in logical pixels (at scale 2 half of 3.7795...). */
+    double d96 = 96.0 / 25.4;
+    CHECK(pac_px_per_mm(0, 1920, 1) == d96);
+    CHECK(pac_px_per_mm(-5, 1920, 1) == d96);
+    CHECK(pac_px_per_mm(500, 0, 1) == d96);
+    CHECK(pac_px_per_mm(160, 1920, 1) == 12);                 /* 304 dpi is believed */
+    CHECK(pac_px_per_mm(1, 1920, 1) == d96);                  /* 48768 dpi */
+    CHECK(pac_px_per_mm(5000, 1920, 1) == d96);               /* under 10 dpi */
+    CHECK(pac_px_per_mm(0, 1920, 2) == d96 / 2);
+    CHECK(pac_px_per_mm(500, 1920, 0) == d96);                /* a scale below 1 is not one */
+    CHECK(pac_px_per_mm(500, 1920, NAN) == d96);
+
+    CHECK(pac_px_per_mm_known(600, 3840, 2) == 3.2);
+    CHECK(pac_px_per_mm_known(0, 1920, 1) == 0 && pac_px_per_mm_known(1, 1920, 1) == 0);   /* a guess is not known */
+    CHECK(pac_px_per_mm_known(500, 1920, 0.5) == 0 && pac_px_per_mm_known(500, 0, 1) == 0);
+
+    double ppm = 4;
+    CHECK(pac_length_px((PacLength){ 1, PAC_LENGTH_IN }, ppm, 1000) == 25.4 * 4);
+    CHECK(pac_length_px((PacLength){ 12, PAC_LENGTH_PX }, ppm, 1000) == 12);
+    CHECK(pac_length_px((PacLength){ 3, PAC_LENGTH_MM }, ppm, 1000) == 12);
+    CHECK(pac_length_px((PacLength){ 72, PAC_LENGTH_PT }, ppm, 1000) == 25.4 * 4);
+    CHECK(pac_length_px((PacLength){ 5, PAC_LENGTH_PERCENT }, ppm, 1000) == 50);
+
+    PacLength lo = { 3, PAC_LENGTH_MM }, hi = { 10, PAC_LENGTH_MM };   /* 12 to 40 px */
+    CHECK(pac_length_clamp(5, &lo, &hi, ppm, 1000) == 12);
+    CHECK(pac_length_clamp(20, &lo, &hi, ppm, 1000) == 20);
+    CHECK(pac_length_clamp(90, &lo, &hi, ppm, 1000) == 40);
+    CHECK(pac_length_clamp(5, NULL, &hi, ppm, 1000) == 5);
+    CHECK(pac_length_clamp(90, &lo, NULL, ppm, 1000) == 90);
+    CHECK(pac_length_clamp(20, NULL, NULL, ppm, 1000) == 20);
+    CHECK(pac_length_clamp(20, &hi, &lo, ppm, 1000) == 40);   /* min above max: the minimum wins */
+
+    /* A maximum under 2 mm (8 px here) or a minimum over 40 mm (160 px) is a mistake, not a wish. */
+    PacLength tiny = { 0.5, PAC_LENGTH_MM }, huge = { 500, PAC_LENGTH_MM };
+    CHECK(pac_length_clamp(30, NULL, &tiny, ppm, 1000) == 8);
+    CHECK(pac_length_clamp(3, NULL, &tiny, ppm, 1000) == 3);
+    CHECK(pac_length_clamp(30, &huge, NULL, ppm, 1000) == 160);
+    CHECK(pac_length_clamp(300, &huge, NULL, ppm, 1000) == 300);
+
+    /* The parser does not follow LC_NUMERIC: a locale that writes "1,5" must still take "1.5".
+     * Skipped where that locale is not generated (the parser is locale-independent by construction). */
+    char saved[64];
+    const char *current = setlocale(LC_NUMERIC, NULL);
+    snprintf(saved, sizeof saved, "%s", current ? current : "C");
+    if (setlocale(LC_NUMERIC, "de_DE.UTF-8")) {
+        double scale = 0;
+        CHECK(pac_length_parse("3.5mm", &l) && l.value == 3.5);
+        CHECK(pac_text_scale_parse("1.5", &scale) && scale == 1.5);
+    } else {
+        fprintf(stderr, "skipped: no de_DE.UTF-8 locale to test LC_NUMERIC independence\n");
+    }
+    setlocale(LC_NUMERIC, saved);
+}
+
 static void test_palette(void) {
     char why[160];
 
@@ -784,6 +878,7 @@ int main(void) {
     test_config_file();
     test_config_path();
     test_config_load();
+    test_config_bool();
     test_config_shared();
     test_pac_conf_example();
     test_setting();
@@ -796,6 +891,7 @@ int main(void) {
     test_field_guards();
     test_fontfind_guards();
     test_palette();
+    test_length();
     test_speech();
     test_random_input();
 

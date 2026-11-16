@@ -1,4 +1,5 @@
 #include "config_file.h"
+#include "length.h"
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -130,7 +131,8 @@ bool pac_config_path(const char *sysconfdir, const char *prog, int which, char *
 }
 
 static const char *const shared_keys[] = {
-    "contrast", "text_scale", "font", "language", "icons", "theme", "speech", "low_memory", "braille_table",
+    "contrast", "text_scale", "text_size_min", "text_size_max", "font", "language", "icons", "theme", "speech",
+    "resources", "privacy", "low_memory", "braille_table",
 };
 
 bool pac_config_shared_key(const char *key) {
@@ -140,10 +142,16 @@ bool pac_config_shared_key(const char *key) {
     return false;
 }
 
-static bool is_yes_no(const char *v) {
-    static const char *const words[] = { "yes", "no", "true", "false", "on", "off", "1", "0" };
+bool pac_config_bool(const char *value, bool *out) {
+    static const struct { const char *word; bool value; } words[] = {
+        { "yes", true }, { "true", true }, { "on", true }, { "1", true },
+        { "no", false }, { "false", false }, { "off", false }, { "0", false },
+    };
     for (size_t i = 0; i < sizeof words / sizeof words[0]; i++)
-        if (strcasecmp(v, words[i]) == 0) return true;
+        if (strcasecmp(value, words[i].word) == 0) {
+            if (out) *out = words[i].value;
+            return true;
+        }
     return false;
 }
 
@@ -152,11 +160,20 @@ static bool shared_value_ok(const char *key, const char *value) {
     /* contrast is normal or high: the value every tool takes (docs/configuration.md). */
     if (strcmp(key, "contrast") == 0)
         return strcmp(value, "normal") == 0 || strcmp(value, "high") == 0;
-    if (strcmp(key, "speech") == 0 || strcmp(key, "low_memory") == 0) return is_yes_no(value);
+    if (strcmp(key, "text_size_min") == 0 || strcmp(key, "text_size_max") == 0) {
+        PacLength length;
+        return pac_length_parse(value, &length);
+    }
+    /* The levels, in order (resources has three, privacy four): each tool says what they do. */
+    if (strcmp(key, "resources") == 0)
+        return strcmp(value, "normal") == 0 || strcmp(value, "low") == 0 || strcmp(value, "minimal") == 0;
+    if (strcmp(key, "privacy") == 0)
+        return strcmp(value, "normal") == 0 || strcmp(value, "medium") == 0 || strcmp(value, "high") == 0 ||
+               strcmp(value, "paranoid") == 0;
+    if (strcmp(key, "speech") == 0 || strcmp(key, "low_memory") == 0) return pac_config_bool(value, NULL);
     if (strcmp(key, "text_scale") == 0) {
-        char *end;
-        double scale = strtod(value, &end);
-        return end != value && !*end && scale >= PAC_TEXT_SCALE_MIN && scale <= PAC_TEXT_SCALE_MAX;   /* also false for NaN */
+        double scale;
+        return pac_text_scale_parse(value, &scale);
     }
     return *value != '\0';   /* a font, language, icon set, theme or braille table has a name */
 }

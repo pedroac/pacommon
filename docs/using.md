@@ -150,3 +150,56 @@ const PacPalette *p = high_contrast ? &PAC_PALETTE_HIGH : &PAC_PALETTE_NORMAL;
 black and white with nothing dimmed). A tool uses them instead of its own colors so that every
 tool matches. `pac_contrast` is the WCAG ratio; `pac_palette_contrast_ok` and
 `pac_palette_meanings_apart` are the checks the tests run.
+
+## length: sizes with a unit, and from the screen to pixels
+
+```c
+#include "length.h"
+PacLength min;
+if (!pac_length_parse("3mm", &min)) { /* "3" has no unit: refused */ }
+double ppm = pac_px_per_mm(physical_mm, mode_width_px, scale);   /* wl_output geometry, mode */
+double px = pac_length_clamp(size_px, &min, &max, ppm, screen_short_side);
+```
+
+`pac_length_parse` is in the header, so checking a setting needs no other file (`config_file.c` does it for
+`text_size_min` and `text_size_max`); `pac_px_per_mm` and `pac_length_clamp` are in `length.c`, which a tool that
+converts adds to its `COMMON_SRCS`.
+
+Units are `px` (logical pixels), `mm`, `in`, `pt` (1/72 inch) and `%` (of `whole`, which the tool picks).
+`pac_px_per_mm` takes the physical width in millimetres (`wl_output.geometry`), the pixel width of the
+current mode (`wl_output.mode`, flagged current) and the output's scale, and returns logical pixels
+per millimetre. A size that is 0 or makes under 50 or over 600 dots per inch (the `PAC_DPI_*`
+limits) is not believed: it gives 96 dpi. `pac_px_per_mm_known` gives 0 there instead, for a size that
+is worse on a guess than on the tool's own rule. The tool listens to `wl_output`; this code does not.
+
+## textlayout: text drawn right in every script
+
+```c
+#include "textlayout.h"
+PacTextOptions o = { pick, NULL, main_face, "ar", PAC_TEXT_RTL };   /* pick: the face of a code point */
+static PacTextLine line;
+if (pac_text_layout(&o, utf8, &line)) {
+    for (size_t i = 0; i < line.count; i++)   /* in visual order, from left to right; sizes are in em */
+        draw(line.glyphs[i].face, line.glyphs[i].glyph, x + line.glyphs[i].x * size, y + line.glyphs[i].y * size);
+    double width = line.width * size;
+}
+size_t cut = pac_text_fit(&o, paragraph, max_width / size, NULL);   /* where a line may end */
+```
+
+The tool chooses the fonts (`pick`: the main font if it has the letter, else one of its script, or NULL) and draws
+the glyphs; this module does the rest: **shaping** (HarfBuzz: Arabic letters that join, the vowel signs and conjuncts
+of Indic scripts, Thai marks), the **order** of right-to-left and mixed text (FriBidi, with the brackets), **lines**
+that break after a space or a hyphen and between ideographs (a full stop does not start a line), and **cuts** that do not
+tear a letter from its marks (`pac_text_next_cluster`, `pac_text_prev_cluster`: Thai and Indic marks, Hangul syllables,
+emoji sequences, flags). `pac_text_language_rtl` says whether a language is written from right to left: a text in
+Arabic is a right-to-left paragraph even when it starts with "Caps Lock", so a tool gives `PAC_TEXT_RTL` or
+`PAC_TEXT_LTR` for its own texts, and `PAC_TEXT_AUTO` (the first strong letter) for what it does not know.
+
+A tool adds `harfbuzz fribidi` to its `PKGS` when built with I18N, and `textlayout.c` to its `COMMON_SRCS`. Built
+with `-DNO_I18N` the same functions need neither library: one glyph for each letter, from left to right, and cuts
+between letters (no marks joined). Nothing is thread safe, and a line is at most `PAC_TEXT_CHARS_MAX` letters.
+`pac_text_finish` before the faces are freed. **Not done:** Thai, Lao, Khmer and Myanmar have no break opportunity
+between words (that needs a dictionary), so a line of them breaks after the last letter that fits; the cluster
+of an Indic conjunct (consonant, virama, consonant) is two clusters; a line wraps as its own paragraph (bidi runs do
+not carry over to the next line). Tested with Noto Sans fonts where installed (`tests/text_test.c`); the font tests
+say what they skipped.

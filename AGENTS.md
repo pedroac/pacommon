@@ -85,7 +85,8 @@ src/              the source, all of it in this folder:
   config_file.[ch]  the settings file and pac.conf      setting.[ch]    the settings store
   field.[ch]        a line of text (passwords)          fontfind.[ch]   finds a font file
   palette.[ch]      the shared colors (normal, high)    compiler.h      GCC/Clang hints
-  speech.[ch]       speaks messages (speech-dispatcher)
+  speech.[ch]       speaks messages (speech-dispatcher)  length.[ch]     sizes with a unit, mm to px
+  textlayout.[ch]   text right in every script (HarfBuzz, FriBidi; plain with NO_I18N)
   tunables.h        sizes, limits, defaults
 pac.mk            install rules for the tools' Makefiles   pac.conf     the shared settings, example
 tests/test.c      unit tests                            tests/distros.sh  tests on other distributions
