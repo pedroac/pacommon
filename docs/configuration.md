@@ -70,7 +70,6 @@ tool.
 | `speech` | `yes`, `no` | `yes` (when built with speech) | Speak focus, changes and messages |
 | `resources` | `normal`, `low`, `minimal` | `normal` | How much memory and work the tool may use: fewer extras, smaller images |
 | `privacy` | `normal`, `medium`, `high`, `paranoid` | `normal` | How much the tool shows, or leaks, about the person and the session |
-| `low_memory` | `yes`, `no` | `no` | The older name of `resources = low` |
 | `braille_table` | a liblouis table name | from `language` | Braille table, for tools that print |
 
 `speech` and `braille_table` do nothing in a build without `SPEECH` or `BRAILLE`, and nothing in a
@@ -83,8 +82,7 @@ off what costs memory or speed (principle 57).
 `resources` has three levels and `privacy` four, each in order (a higher privacy level includes the
 ones before it). `pacommon` defines the names and the rules
 below; **each tool says, in its README and example `<tool>.conf`, what each level does**, and a
-higher level never does less than a lower one. `low_memory = yes` is `resources = low`, and `no` is
-`normal`. A level is a default: the tool's own settings still decide what the person set.
+higher level never does less than a lower one. A level is a default: the tool's own settings still decide what the person set.
 
 1. **The accessibility settings are not levels' to change.** `contrast`, `speech`, `text_scale`,
    `text_size_min` and `text_size_max` are never turned off or overridden by `resources` or

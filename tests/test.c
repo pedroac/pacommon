@@ -461,7 +461,7 @@ static void test_config_shared(void) {
     CHECK_STR(last_value(&s, "privacy"), "medium");        /* ...four for privacy; extreme and 2 are refused */
     CHECK(s.refused == 1);                                 /* speech was offered, and refused silently */
     for (int i = 0; i < s.count; i++) {                    /* not shared, or a bad value: never delivered */
-        CHECK(strcmp(s.keys[i], "low_memory") != 0 && strcmp(s.keys[i], "text_scale_x") != 0);
+        CHECK(strcmp(s.keys[i], "text_scale_x") != 0);
         CHECK(!(strcmp(s.keys[i], "window_width") == 0 && strcmp(s.values[i], "100") == 0));
     }
 
@@ -482,7 +482,7 @@ static void test_pac_conf_example(void) {
     if (!f) { fprintf(report, "FAIL pac.conf not found (run from the pacommon folder)\n"); failures++; return; }
     static const char *const keys[] = { "contrast", "text_scale", "text_size_min", "text_size_max", "font",
                                         "language", "icons", "theme", "speech", "resources", "privacy",
-                                        "low_memory", "braille_table" };
+                                        "braille_table" };
     enum { KEYS = sizeof keys / sizeof keys[0] };
     int seen[KEYS] = { 0 }, lines = 0;
     char line[512], out[300];

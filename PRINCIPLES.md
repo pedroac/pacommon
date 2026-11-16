@@ -134,7 +134,7 @@ how.
 57. **Convenience before smallness.** Small and fast is the default, but not at the cost of
     reasonable convenience. When a smaller buffer, a shorter list, a missing feature or a faster
     path would make the tool harder to use, or make the person do work the tool could do, choose
-    the convenient behavior. Convenience is the default; `low_memory = yes`, or a build option that
+    the convenient behavior. Convenience is the default; `resources = low`, or a build option that
     does the same, turns it off for someone who wants the smallest memory or the most speed.
     A comparison with another tool (its size, its memory, its speed) is a reference, to know where
     the tool stands and what its parts cost; it is not a contest, and no change is made only to
@@ -212,7 +212,7 @@ how.
 20. **Bad input is never fatal.** A wrong line or value is reported on stderr with file and line and
     skipped. The tool starts anyway. A message is printed once, not on every use.
 21. **The same look, the same keys.** `contrast`, `icons`, `text_scale`, `font`, `language`,
-    `speech`, `low_memory` and `braille_table` mean the same in every tool that has them
+    `speech` and `braille_table` mean the same in every tool that has them
     (`docs/configuration.md`). A tool that has a color scheme calls it `theme`.
 22. **Themes are plain `.conf` files.** A tool that has themes keeps each one as a `<name>.conf` of
     `key = value` lines (colors, fonts, sizes), in the format of principle 19. They are found in
@@ -231,7 +231,7 @@ how.
     that an option cannot be added, removed or renamed without it.
 25. **Options for footprint, speed and accessibility.** What a build can remove (principle 10), the
     configuration can also switch off while it is still compiled in. Features that cost memory or
-    CPU can be turned off (`low_memory`, `animations`, ...), and the accessibility features of
+    CPU can be turned off (`resources`, `animations`, ...), and the accessibility features of
     principles 34 to 37 can be turned on or off (`contrast`, `text_scale`, `speech`, ...). Off means
     off: nothing is loaded, opened or connected for it. The convenient behavior is the default
     (principle 57).

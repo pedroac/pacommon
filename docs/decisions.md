@@ -415,3 +415,9 @@ Open, found against the new principles and not changed:
 - **Decided:** `pac_config_bool` in `config_file.c` reads yes, true, on, 1, no, false, off and 0 in any case; the shared-key check uses it (it was a validator only) and so does a tool's own yes/no settings (paclock's `parse_bool` is gone).
 - **Why:** the shared check was case-insensitive and paclock's own parser was not, so `speech = Yes` in `pac.conf` passed the check and was refused by the tool. One function, one rule.
 - **When:** 2026-11-16
+
+## 2026-11-16: `low_memory` removed
+
+- **The `low_memory` key is gone** from `pac.conf`, `config_file.c`, the tests and the docs: it was
+  only the older name of `resources = low`. A `low_memory` line is now an unknown key, as in any
+  other file. The entries above that mention it are history.

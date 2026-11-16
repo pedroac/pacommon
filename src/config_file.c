@@ -132,7 +132,7 @@ bool pac_config_path(const char *sysconfdir, const char *prog, int which, char *
 
 static const char *const shared_keys[] = {
     "contrast", "text_scale", "text_size_min", "text_size_max", "font", "language", "icons", "theme", "speech",
-    "resources", "privacy", "low_memory", "braille_table",
+    "resources", "privacy", "braille_table",
 };
 
 bool pac_config_shared_key(const char *key) {
@@ -170,7 +170,7 @@ static bool shared_value_ok(const char *key, const char *value) {
     if (strcmp(key, "privacy") == 0)
         return strcmp(value, "normal") == 0 || strcmp(value, "medium") == 0 || strcmp(value, "high") == 0 ||
                strcmp(value, "paranoid") == 0;
-    if (strcmp(key, "speech") == 0 || strcmp(key, "low_memory") == 0) return pac_config_bool(value, NULL);
+    if (strcmp(key, "speech") == 0) return pac_config_bool(value, NULL);
     if (strcmp(key, "text_scale") == 0) {
         double scale;
         return pac_text_scale_parse(value, &scale);
