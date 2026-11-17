@@ -472,6 +472,19 @@ static void test_config_shared(void) {
     CHECK(last_value(&only, "window_width") == NULL);
     pac_config_load_shared("tool", NULL, NULL);            /* no handler: nothing to do, no crash */
 
+    /* The current folder's pac.conf is read, unless the tool leaves that location out. */
+    write_file("pac.conf", "font = Cwd Sans\nwindow_width = 5\n");
+    struct shared_seen with_cwd = { .count = 0 }, without = { .count = 0 }, one = { .count = 0 };
+    pac_config_load_shared("tool", shared_collect, &with_cwd);
+    CHECK_STR(last_value(&with_cwd, "font"), "Cwd Sans");
+    pac_config_load_shared_locations("tool", PAC_CONFIG_LOCATIONS_NO_CWD, shared_collect, &without);
+    CHECK_STR(last_value(&without, "font"), "Shared Sans");
+    CHECK(last_value(&without, "window_width") == NULL);
+    pac_config_load_shared_file("tool", "pac.conf", shared_collect, &one);   /* one file, shared keys only */
+    CHECK_STR(last_value(&one, "font"), "Cwd Sans");
+    CHECK(last_value(&one, "window_width") == NULL);
+    unlink("pac.conf");
+
     if (chdir(cwd) != 0) exit(2);
 }
 

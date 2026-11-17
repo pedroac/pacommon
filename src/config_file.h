@@ -14,6 +14,9 @@
  *   $XDG_CONFIG_HOME/pac/<prog>.conf, or ~/.config/pac/<prog>.conf
  *   <prog>.conf in the current folder */
 #define PAC_CONFIG_LOCATIONS 3
+/* How many of them, counting from the first, leave the current folder out: for a tool that runs
+ * before anybody has logged in, or with more rights than whoever owns the folder it was started in. */
+#define PAC_CONFIG_LOCATIONS_NO_CWD 2
 
 /* What a settings file may be (the limits are in tunables.h). Anything else is reported and skipped (the tool still starts):
  * a file that is not a regular file (a pipe would block the tool, a device never ends), a file
@@ -46,6 +49,13 @@ bool pac_config_shared_key(const char *key);
  * the handler, whose refusal is silent: a tool does not have every shared setting, and `speech` in
  * pac.conf must not be a warning in a tool that cannot speak. */
 void pac_config_load_shared(const char *prog, PacConfigHandler handler, void *data);
+
+/* One shared file, at path: what pac_config_load_shared does with each of its files. */
+void pac_config_load_shared_file(const char *prog, const char *path, PacConfigHandler handler, void *data);
+
+/* The shared files of the first `count` locations (PAC_CONFIG_LOCATIONS, or
+ * PAC_CONFIG_LOCATIONS_NO_CWD), lowest priority first. pac_config_load_shared is all of them. */
+void pac_config_load_shared_locations(const char *prog, int count, PacConfigHandler handler, void *data);
 
 /* Every file there is, from the lowest priority to the highest: the shared files first, then the
  * tool's own, so that a setting in <prog>.conf, anywhere, beats the same one in pac.conf. */

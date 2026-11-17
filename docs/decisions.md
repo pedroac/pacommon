@@ -421,3 +421,9 @@ Open, found against the new principles and not changed:
 - **The `low_memory` key is gone** from `pac.conf`, `config_file.c`, the tests and the docs: it was
   only the older name of `resources = low`. A `low_memory` line is now an unknown key, as in any
   other file. The entries above that mention it are history.
+
+## 2026-11-17: the shared files, one at a time or without the current folder
+
+- **Decided:** `pac_config_load_shared` is split: `pac_config_load_shared_file(prog, path, ...)` reads one `pac.conf` with the shared-key checks, and `pac_config_load_shared_locations(prog, count, ...)` reads the first `count` of the usual places; `pac_config_load_shared` is all of them. `PAC_CONFIG_LOCATIONS_NO_CWD` (2) leaves out the current folder.
+- **Why:** pacgreet runs as the greeter user before anybody has logged in and runs commands from its own settings, so it must not read files from its working folder. Its `pac.conf` was the one place left that did. The other tools' behavior is unchanged.
+- **When:** 2026-11-17

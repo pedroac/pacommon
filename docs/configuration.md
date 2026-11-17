@@ -34,7 +34,9 @@ A key that is not a shared one, or a value that cannot be right (`text_scale = b
 with its file and line and skipped. `make install` installs a `pac.conf` with every line
 commented out, so it changes nothing until a line is edited. A tool opts in by using
 `pac_config_load` (or `pac_config_load_shared`, for one that reads its files itself): see
-[using.md](using.md).
+[using.md](using.md). A tool that must not read the current folder's files (one that runs before
+anybody has logged in) reads the shared ones with `pac_config_load_shared_locations(prog,
+PAC_CONFIG_LOCATIONS_NO_CWD, ...)`, or one with `pac_config_load_shared_file`.
 
 ## Themes
 

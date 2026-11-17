@@ -190,13 +190,21 @@ static bool shared_handler(const char *key, const char *value, void *data) {
     return true;
 }
 
-void pac_config_load_shared(const char *prog, PacConfigHandler handler, void *data) {
+void pac_config_load_shared_file(const char *prog, const char *path, PacConfigHandler handler, void *data) {
     if (!handler) return;
     struct shared shared = { handler, data };
+    pac_config_load_file(prog, path, shared_handler, &shared);
+}
+
+void pac_config_load_shared_locations(const char *prog, int count, PacConfigHandler handler, void *data) {
     char path[PAC_CONFIG_PATH_MAX];
-    for (int which = 0; which < PAC_CONFIG_LOCATIONS; which++)
+    for (int which = 0; which < count && which < PAC_CONFIG_LOCATIONS; which++)
         if (pac_config_path(NULL, PAC_SHARED_CONFIG, which, path, sizeof path))
-            pac_config_load_file(prog, path, shared_handler, &shared);
+            pac_config_load_shared_file(prog, path, handler, data);
+}
+
+void pac_config_load_shared(const char *prog, PacConfigHandler handler, void *data) {
+    pac_config_load_shared_locations(prog, PAC_CONFIG_LOCATIONS, handler, data);
 }
 
 void pac_config_load(const char *prog, PacConfigHandler handler, void *data) {
