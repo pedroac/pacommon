@@ -1,4 +1,6 @@
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include "fontfind.h"
 #include <ftw.h>
 #include <stdio.h>

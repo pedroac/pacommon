@@ -8,6 +8,17 @@ comments and `PRINCIPLES.md`. The author should confirm that the reasons are the
 
 ## Open
 
+- **Speech shared between processes is left to the server.** Tools that speak at once could have
+  coordinated through shared state, but speech-dispatcher already orders every client's messages
+  by priority (its message priority model), screen readers included, and shared state would go
+  stale when a process dies and would not cover them. So pacommon only passes a priority
+  (`speech_say_as`, `SpeechAnnounce.priority`). Tried with two processes on the author's server
+  (speech-dispatcher, 2026-11): a text message waits for a message being said; important ones
+  queue in order; an important one cuts off text at once; a notification is dropped while
+  something is said. A cue for a speech that was cut off ("...uh")
+  is not pacommon's job: only the server knows that a message was cut off by a higher priority,
+  and a tool that said it afterwards would be a new speech cutting in on the one that interrupted.
+  It would belong in speech-dispatcher.
 - **Speech through a program.** By principle 3, speech could be `spd-say` (or `speechd`'s own
   client) run as a command instead of linking libspeechd: no library, and the same
   `speech = no` and `SPEECH=none`. It costs a process per message and gives no way to interrupt

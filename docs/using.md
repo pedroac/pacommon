@@ -128,8 +128,29 @@ COMMON_SRCS += $(PACOMMON)/src/speech.c
 #include "speech.h"
 bool speaking = speech_open("paclock", settings.language);   // before anything that must not wait
 speech_say("Authentication failed");                         // cuts off what is still being said
+speech_cancel();                                             // stop speaking, say nothing
+speech_finish(2000);                                         // before exiting: let it end, at most 2 s
 speech_close();
 ```
+
+For a focus that moves fast (typing a search, holding an arrow key) use `speech_announce` instead of
+`speech_say` on every change: it says only where the focus stops, the lead (results, section) only
+when it changed, and the description later, without cutting the name off.
+
+```c
+speech_announce(&(SpeechAnnounce){ .lead = "12 results.", .name = "Firefox", .desc = "Web browser",
+                                   .settle_ms = 150, .desc_ms = 1000 });
+int wait = speech_next_ms();                    // -1: nothing planned; use it in the event wait's timeout
+/* ... wait for events, at most `wait` ... */  speech_tick();
+```
+
+Several tools (and a screen reader) speak through the same server, which keeps one order between
+all of them. `speech_say_as(priority, text)` picks where a message stands: `SPEECH_IMPORTANT` (an
+error; never cut off, said at once), `SPEECH_MESSAGE` (waits for its turn, cuts off text and
+notifications), `SPEECH_TEXT` (what is being looked at; cuts off the text before it, waits for
+messages) and `SPEECH_NOTIFICATION` (dropped if anything else is being said). `speech_say` is
+`SPEECH_MESSAGE` that also cancels this tool's own earlier speech; `speech_announce` says the name
+as `SPEECH_TEXT` (or `.priority`) and the description as `SPEECH_NOTIFICATION`.
 
 The tool decides what is spoken and when; this only talks to the server. Speak only what is also on
 the screen, and never a password or what is typed. `speech_open` returns false (and says so once on

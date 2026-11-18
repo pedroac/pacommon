@@ -77,6 +77,13 @@
 #define FONT_WALK_FDS 16
 #endif
 
+/* ---- speech ---- */
+
+/* The longest part (lead, name or description) of speech_announce, in bytes, including the end. */
+#ifndef PAC_SPEECH_PART_MAX
+#define PAC_SPEECH_PART_MAX 256
+#endif
+
 /* ---- checks: a build with values that cannot work stops here ---- */
 
 _Static_assert(PAC_CONFIG_MAX_LINE >= 63 && PAC_CONFIG_MAX_LINE < PAC_CONFIG_MAX_SIZE,
@@ -87,6 +94,7 @@ _Static_assert(PAC_TEXT_SCALE_MIN > 0 && PAC_TEXT_SCALE_MAX > PAC_TEXT_SCALE_MIN
 _Static_assert(PAC_SETTING_KEY_MAX >= 1 && PAC_SETTING_VALUE_MAX >= 0 &&
                PAC_SETTING_POOL >= PAC_SETTING_KEY_MAX + PAC_SETTING_VALUE_MAX + 2,
                "PAC_SETTING_POOL must hold at least one setting of the largest size");
+_Static_assert(PAC_SPEECH_PART_MAX >= 32, "PAC_SPEECH_PART_MAX is too small");
 _Static_assert(FIELD_MAX >= 16 && FIELD_MAX <= 65536, "FIELD_MAX is out of range");
 _Static_assert(FONT_MAX_DIRS >= 1 && FONT_DIR_MAX >= 32 && FONT_PATH_MAX >= 32 && FONT_WALK_FDS >= 1,
                "the font search limits are too small");

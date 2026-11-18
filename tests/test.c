@@ -770,7 +770,75 @@ static void test_speech(void) {
     /* Without a backend, or with no server, nothing is spoken and nothing breaks. */
     speech_say("hello");   /* not open */
     speech_say(NULL);
+    speech_say_as(SPEECH_IMPORTANT, "hello");
+    speech_say_as((SpeechPriority)99, "hello");
+    speech_cancel();       /* nothing to stop */
+    speech_finish(1000);   /* nothing to wait for: returns at once */
     speech_close();
+}
+
+static char heard[8][600];
+static int heard_n;
+static long long clock_ms;
+static SpeechPriority heard_priority[8];
+static void hear(SpeechPriority priority, const char *text) {
+    if (heard_n < 8) { heard_priority[heard_n] = priority; snprintf(heard[heard_n++], sizeof heard[0], "%s", text); }
+}
+static long long fake_now(void) { return clock_ms; }
+
+/* The focus moves fast: only where it stops is said, the lead only when it changes, the description later. */
+static void test_speech_announce(void) {
+    speech_test_hooks(hear, fake_now);
+    heard_n = 0; clock_ms = 0;
+    speech_announce(&(SpeechAnnounce){ .lead = "3 results.", .name = "Firefox", .desc = "Web browser", .settle_ms = 150, .desc_ms = 1000 });
+    CHECK(speech_next_ms() == 150);
+    clock_ms = 100; speech_tick(); CHECK(heard_n == 0);
+    speech_announce(&(SpeechAnnounce){ .lead = "3 results.", .name = "Chrome", .desc = "Another browser", .settle_ms = 150, .desc_ms = 1000 });
+    CHECK(speech_next_ms() == 150);                        /* a new call starts the wait again */
+    clock_ms = 250; speech_tick();
+    CHECK(heard_n == 1); CHECK_STR(heard[0], "3 results. Chrome");   /* Firefox was never said */
+    CHECK(speech_next_ms() == 1000);
+    clock_ms = 1250; speech_tick();
+    CHECK(heard_n == 2); CHECK_STR(heard[1], "Another browser");
+    CHECK(heard_priority[0] == SPEECH_TEXT && heard_priority[1] == SPEECH_NOTIFICATION);   /* the name matters, the description is a bonus */
+    CHECK(speech_next_ms() == -1);
+
+    /* The same lead is not said again; a moved focus is not described. */
+    speech_announce(&(SpeechAnnounce){ .lead = "3 results.", .name = "Files", .desc = "Folders", .settle_ms = 0, .desc_ms = 1000 });
+    clock_ms = 1300; speech_tick();
+    CHECK(heard_n == 3); CHECK_STR(heard[2], "Files");
+    speech_announce(&(SpeechAnnounce){ .lead = "1 result.", .name = "Files", .desc = "Folders", .settle_ms = 0, .desc_ms = 1000 });
+    clock_ms = 1400; speech_tick();
+    CHECK(heard_n == 4); CHECK_STR(heard[3], "1 result. Files");
+    clock_ms = 9000; speech_tick(); CHECK(heard_n == 5); CHECK_STR(heard[4], "Folders");
+
+    /* The same name twice is said once; an intro is said every time and before the lead. */
+    speech_announce(&(SpeechAnnounce){ .lead = "1 result.", .name = "Files", .settle_ms = 0 });
+    clock_ms = 9100; speech_tick(); CHECK(heard_n == 5);
+    speech_announce(&(SpeechAnnounce){ .intro = "Hello.", .lead = "Home.", .name = "Files", .settle_ms = 0 });
+    clock_ms = 9200; speech_tick(); CHECK(heard_n == 6); CHECK_STR(heard[5], "Hello. Home. Files");
+
+    /* The priority is the tool's to choose for the name. */
+    speech_announce(&(SpeechAnnounce){ .name = "Failed", .priority = SPEECH_IMPORTANT, .settle_ms = 0 });
+    clock_ms = 9250; speech_tick(); CHECK(heard_n == 7 && heard_priority[6] == SPEECH_IMPORTANT);
+    heard_n = 6;
+
+    /* A part too long is cut, never overrun. */
+    char big[1000];
+    memset(big, 'a', sizeof big - 1); big[sizeof big - 1] = '\0';
+    speech_announce(&(SpeechAnnounce){ .name = big, .settle_ms = 0 });
+    clock_ms = 9300; speech_tick(); CHECK(heard_n == 7 && strlen(heard[6]) == 255);
+
+    /* Cancelling forgets what was planned: neither the name nor the description is said. */
+    speech_announce(&(SpeechAnnounce){ .name = "Gone", .desc = "Too", .settle_ms = 100, .desc_ms = 100 });
+    speech_cancel();
+    CHECK(speech_next_ms() == -1);
+    clock_ms = 20000; speech_tick(); CHECK(heard_n == 7);
+    speech_announce(&(SpeechAnnounce){ .name = "Said", .desc = "Not this", .settle_ms = 0, .desc_ms = 100 });
+    clock_ms = 20100; speech_tick(); CHECK(heard_n == 8);
+    speech_cancel();                                       /* after the name: no description */
+    clock_ms = 30000; speech_tick(); CHECK(heard_n == 8);
+    speech_test_hooks(NULL, NULL);
 }
 
 int main(void) {
@@ -797,6 +865,7 @@ int main(void) {
     test_fontfind_guards();
     test_palette();
     test_speech();
+    test_speech_announce();
     test_random_input();
 
     remove_tree(tmp);
