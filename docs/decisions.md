@@ -6,6 +6,71 @@ decided, why, and what else was considered.
 The entries marked "recorded from the code" were written down on 2026-11-15 from the code, its
 comments and `PRINCIPLES.md`. The author should confirm that the reasons are the real ones.
 
+## 2026-11-16: text layout in pacommon (`textlayout.[ch]`)
+
+- **Decided:** one module that lays out a line of text and says where a paragraph may break: shaping with HarfBuzz, the
+  order of right-to-left and mixed text with FriBidi, cluster-aware cuts, and line breaks after spaces and hyphens and between
+  ideographs. It takes FreeType faces and gives back glyphs and positions in em, so a tool draws them with its own library
+  (paclock: Cairo). The choice of fonts stays with the tool (a callback), as the table of script fonts is the tool's.
+  With `-DNO_I18N` (the tool's `I18N=0`) the same functions need neither library and draw left to right. The `pacommon`
+  Makefile builds and tests both flavours where HarfBuzz and FriBidi are installed (`tests/text_test.c`: 4,589 checks with
+  them, 4,543 plain, under the sanitizers too, with a fuzz of random bytes).
+- **Why:** the principles already expected HarfBuzz and FriBidi in translated builds (principle 2, `apis.md`), and pacpeek and
+  pacreact had their own; Arabic, Hebrew, Indic and Thai text cannot be drawn without them, and a language the person reads
+  is more than the usual few. In `pacommon` every tool can have it.
+- **Considered:** Pango (rejected: heavy, and it draws itself); libunibreak or ICU for the line breaks (rejected: a new
+  dependency for what spaces, hyphens and ideographs cover; Thai and the like fall back to a cut after the last letter that
+  fits); moving pacpeek's `shape.c` (it does one font and no fallback; paclock needs a font for each script and marks that
+  keep the face of their letter).
+- **A language's direction beats the first letter:** a message in Arabic, Hebrew or Persian that starts with a Latin word
+  ("Caps Lock") was laid out left to right, with its colon on the wrong side; the tool passes the direction of its language
+  (`pac_text_language_rtl`). `PAC_TEXT_AUTO` stays for text of unknown language.
+- **Cost:** about 8 kB of binary in paclock, and the two libraries when built with I18N (HarfBuzz is already mapped by FreeType).
+- **When:** 2026-11-16
+
+## 2026-11-16: comparisons are for reference
+
+- **Decided:** a comparison with another tool (binary size, memory, CPU) is written as a reference and not as a goal, and principle 57 now says so. A saving is taken only where it costs a person nothing they need, and its cost is written next to it.
+- **Why:** the author: apps for people should be simple, but not extremely minimalist, so that they become inconvenient for the sake of machine performance.
+
+## 2026-11-16: privacy prevails over resources
+
+- **Decided:** when `privacy` and `resources` disagree, privacy wins: a tool does what the privacy level promises even if that takes more memory, another process or more time than `resources` allows (`docs/configuration.md` rule 5, principle 58). In paclock, `privacy = medium` runs `busctl` and `pactl` at `resources = minimal` too.
+- **Why:** the author: a person who sets a higher privacy level does it because it matters, and it could be a company policy. A level that quietly gives way to a memory saving would break that promise without saying so.
+- **Considered:** making `resources = minimal` skip the privacy work that costs memory (rejected, for that reason); a warning when the two disagree (not done: the combination is allowed and the tool's README says what it costs).
+
+## 2026-11-16: shared text size limits, and the `resources` and `privacy` levels
+
+- **Decided:** `text_size_min`, `text_size_max`, `resources` (`normal`, `low`, `minimal`) and
+  `privacy` (`normal`, `medium`, `high`, `paranoid`: four, as the author listed what each does) are shared keys in `pac.conf`, validated in
+  `config_file.c`; `low_memory` stays as the old name of `resources = low`. The rules for what
+  wins (accessibility settings are never changed by a level, the limits beat base sizes, absurd
+  limits are pulled to 2 and 40 mm, a card may stay on the screen) are in
+  `docs/configuration.md` and principle 58. Each tool decides what its levels do.
+- **Why:** someone who needs larger text, speech or high contrast should say it once for every
+  tool, and a tool that saves memory or hides information must not undo it. Levels instead of a
+  yes/no so that one setting can mean "a little less" and "as little as possible".
+- **Considered:** one number per level (rejected: three words are readable in a file); letting
+  `minimal` override the size limits (rejected: accessibility before memory); a floor and ceiling
+  on the final size, not only on the limits (rejected: it would also override a tool's own base
+  size on a small screen, where the fit rule is the right limit).
+- **Cost, and a mistake caught:** `config_file.c` checks the sizes with `pac_length_parse`. It first lived in `length.c`,
+  and pacgreet, pacpeek and pacreact (which compile `config_file.c` and not `length.c`) failed to link against it. It is now
+  `static inline` in `length.h`, so no existing tool needs a new file; `length.c` is only for the conversion.
+
+## 2026-11-16: lengths with a unit (`length.[ch]`)
+
+- **Decided:** one shared parser and converter for sizes written as `12px`, `3mm`, `0.2in`, `10pt` or `5%`,
+  and for turning a `wl_output`'s physical size into pixels. The unit is required. A physical size
+  that is 0 or makes under 50 or over 600 dpi is replaced by 96 dpi.
+- **Why:** a text size limit has to mean the same size on every screen, which only a physical unit
+  does, and more than one tool will want it. Virtual machines, projectors and some TVs report 0 or
+  made-up millimetres, so the number cannot be trusted blindly. A bare number was refused because
+  it cannot say which unit it is.
+- **Considered:** `pt` is there because it is the unit of fonts. Exponents and hexadecimal are
+  refused so `1e1mm` and `0x10px` are not read. The conversion does not listen to `wl_output`
+  itself: it takes the numbers, so it needs no display and is tested without one.
+
 ## Open
 
 - **Speech shared between processes is left to the server.** Tools that speak at once could have
@@ -355,3 +420,21 @@ Open, found against the new principles and not changed:
 - **The Makefile adds hardening flags to `CFLAGS` instead of relying on them.** Why: a user who
   overrides `CFLAGS` for optimization must not lose them silently. CET is probed with the
   compiler because `uname -m` describes the build host, not the target.
+
+## 2026-11-16: one yes/no parser (`pac_config_bool`)
+
+- **Decided:** `pac_config_bool` in `config_file.c` reads yes, true, on, 1, no, false, off and 0 in any case; the shared-key check uses it (it was a validator only) and so does a tool's own yes/no settings (paclock's `parse_bool` is gone).
+- **Why:** the shared check was case-insensitive and paclock's own parser was not, so `speech = Yes` in `pac.conf` passed the check and was refused by the tool. One function, one rule.
+- **When:** 2026-11-16
+
+## 2026-11-16: `low_memory` removed
+
+- **The `low_memory` key is gone** from `pac.conf`, `config_file.c`, the tests and the docs: it was
+  only the older name of `resources = low`. A `low_memory` line is now an unknown key, as in any
+  other file. The entries above that mention it are history.
+
+## 2026-11-17: the shared files, one at a time or without the current folder
+
+- **Decided:** `pac_config_load_shared` is split: `pac_config_load_shared_file(prog, path, ...)` reads one `pac.conf` with the shared-key checks, and `pac_config_load_shared_locations(prog, count, ...)` reads the first `count` of the usual places; `pac_config_load_shared` is all of them. `PAC_CONFIG_LOCATIONS_NO_CWD` (2) leaves out the current folder.
+- **Why:** pacgreet runs as the greeter user before anybody has logged in and runs commands from its own settings, so it must not read files from its working folder. Its `pac.conf` was the one place left that did. The other tools' behavior is unchanged.
+- **When:** 2026-11-17

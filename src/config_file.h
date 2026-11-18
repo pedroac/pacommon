@@ -14,6 +14,9 @@
  *   $XDG_CONFIG_HOME/pac/<prog>.conf, or ~/.config/pac/<prog>.conf
  *   <prog>.conf in the current folder */
 #define PAC_CONFIG_LOCATIONS 3
+/* How many of them, counting from the first, leave the current folder out: for a tool that runs
+ * before anybody has logged in, or with more rights than whoever owns the folder it was started in. */
+#define PAC_CONFIG_LOCATIONS_NO_CWD 2
 
 /* What a settings file may be (the limits are in tunables.h). Anything else is reported and skipped (the tool still starts):
  * a file that is not a regular file (a pipe would block the tool, a device never ends), a file
@@ -28,12 +31,17 @@ typedef bool (*PacConfigHandler)(const char *key, const char *value, void *data)
  * does not exist is silent; the other reasons are reported. */
 int pac_config_load_file(const char *prog, const char *path, PacConfigHandler handler, void *data);
 
+/* A yes/no setting: yes, true, on or 1; no, false, off or 0, in any case. `out` (may be NULL) gets the value;
+ * false for anything else, and `out` is then left alone. The shared keys are checked with it, and a tool reads its
+ * own yes/no settings with it, so that a value the shared check accepts is one the tool accepts too. */
+bool pac_config_bool(const char *value, bool *out);
+
 /* The settings that every pac tool has in common (docs/configuration.md) can be set once, in
  * pac.conf, which is looked for in the same three places as <prog>.conf. */
 #define PAC_SHARED_CONFIG "pac"
 
 /* True for the keys that pac.conf may hold: contrast, text_scale, font, language, icons, theme,
- * speech, low_memory and braille_table. */
+ * speech and braille_table. */
 bool pac_config_shared_key(const char *key);
 
 /* The shared files, from the lowest priority to the highest. A key that is not a shared one, or
@@ -41,6 +49,13 @@ bool pac_config_shared_key(const char *key);
  * the handler, whose refusal is silent: a tool does not have every shared setting, and `speech` in
  * pac.conf must not be a warning in a tool that cannot speak. */
 void pac_config_load_shared(const char *prog, PacConfigHandler handler, void *data);
+
+/* One shared file, at path: what pac_config_load_shared does with each of its files. */
+void pac_config_load_shared_file(const char *prog, const char *path, PacConfigHandler handler, void *data);
+
+/* The shared files of the first `count` locations (PAC_CONFIG_LOCATIONS, or
+ * PAC_CONFIG_LOCATIONS_NO_CWD), lowest priority first. pac_config_load_shared is all of them. */
+void pac_config_load_shared_locations(const char *prog, int count, PacConfigHandler handler, void *data);
 
 /* Every file there is, from the lowest priority to the highest: the shared files first, then the
  * tool's own, so that a setting in <prog>.conf, anywhere, beats the same one in pac.conf. */

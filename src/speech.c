@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <time.h>
 
 /* A tool that translates its messages names its i18n.h here (-DPACOMMON_I18N='"i18n.h"'). */
 #ifdef PACOMMON_I18N

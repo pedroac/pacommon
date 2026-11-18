@@ -14,10 +14,11 @@ can use and anyone can change.
 - **Configuration that just works** (18 to 25). Every setting has a default and no file is
   required. Files are plain `key = value`, easy to read and to create, documented, shared where
   the tools share a setting, and themes are the same kind of file.
-- **For everyone** (26 to 38). Usable without setup, even by a child. The main task is large and
+- **For everyone** (26 to 38 and 58). Usable without setup, even by a child. The main task is large and
   the rest is quiet. What a person cannot see happen is confirmed in a line. Plain text, colors
   that a color-blind person can tell apart, keyboard and pointer both complete, speech and braille
-  when wanted, translated. It detects what is probably wrong and remembers what you chose.
+  when wanted, translated. It detects what is probably wrong and remembers what you chose. What a
+  person needs to see or hear is theirs to set, and no level overrides it.
 - **Safe and respectful** (39 to 44). Hardened builds, guarded input, private files, nothing sent
   anywhere.
 - **Made with AI, owned by people** (45 to 48). AI writes and reviews; a person reads, understands
@@ -133,8 +134,12 @@ how.
 57. **Convenience before smallness.** Small and fast is the default, but not at the cost of
     reasonable convenience. When a smaller buffer, a shorter list, a missing feature or a faster
     path would make the tool harder to use, or make the person do work the tool could do, choose
-    the convenient behavior. Convenience is the default; `low_memory = yes`, or a build option that
+    the convenient behavior. Convenience is the default; `resources = low`, or a build option that
     does the same, turns it off for someone who wants the smallest memory or the most speed.
+    A comparison with another tool (its size, its memory, its speed) is a reference, to know where
+    the tool stands and what its parts cost; it is not a contest, and no change is made only to
+    lower a number. A tool for people is simple, and is not so minimal that it becomes
+    inconvenient for the machine's sake.
     Convenience never excuses a missing check, a skipped event or an error that is not reported:
     those are correctness. Check: every convenience that costs memory or speed has a setting or a
     build option that removes it, and the default is the convenient one.
@@ -207,7 +212,7 @@ how.
 20. **Bad input is never fatal.** A wrong line or value is reported on stderr with file and line and
     skipped. The tool starts anyway. A message is printed once, not on every use.
 21. **The same look, the same keys.** `contrast`, `icons`, `text_scale`, `font`, `language`,
-    `speech`, `low_memory` and `braille_table` mean the same in every tool that has them
+    `speech` and `braille_table` mean the same in every tool that has them
     (`docs/configuration.md`). A tool that has a color scheme calls it `theme`.
 22. **Themes are plain `.conf` files.** A tool that has themes keeps each one as a `<name>.conf` of
     `key = value` lines (colors, fonts, sizes), in the format of principle 19. They are found in
@@ -226,7 +231,7 @@ how.
     that an option cannot be added, removed or renamed without it.
 25. **Options for footprint, speed and accessibility.** What a build can remove (principle 10), the
     configuration can also switch off while it is still compiled in. Features that cost memory or
-    CPU can be turned off (`low_memory`, `animations`, ...), and the accessibility features of
+    CPU can be turned off (`resources`, `animations`, ...), and the accessibility features of
     principles 34 to 37 can be turned on or off (`contrast`, `text_scale`, `speech`, ...). Off means
     off: nothing is loaded, opened or connected for it. The convenient behavior is the default
     (principle 57).
@@ -303,6 +308,21 @@ how.
     fallback; catalogs live in `po/`. A machine-written translation is marked `fuzzy` in its `.po`
     entry, and the catalog header says so, until a native speaker reviews it. A tool built with
     `I18N=0` is English only and links no translation code.
+    Text of every script is drawn right: shaped, in the right order, and cut and wrapped where the script allows it
+    (`textlayout.[ch]`, HarfBuzz and FriBidi in translated builds); an English-only build draws left to right.
+
+58. **People set the limits, levels set the defaults.** What a person needs to see, hear or read
+    (`contrast`, `speech`, `text_scale`, `text_size_min`, `text_size_max`) is theirs, and no level
+    of `resources` or `privacy` turns it off or overrides it. A level changes what a tool does by
+    default, in ordered steps (three for `resources`, four for `privacy`) whose meaning each tool
+    writes down; it never takes away a result a person needs to be told. The size limits hold
+    whatever a tool's base sizes are, except that an absurd limit is pulled to a sane one and a card
+    may stay on the screen (`docs/configuration.md`). **Privacy prevails over resources.** A person
+    who sets a higher privacy level has a reason (a company policy, a shared screen), so a tool
+    gives up nothing of what that level promises to save memory, and uses the memory, the
+    processes and the time it needs for it, even above what `resources` would allow. Check: the
+    tests of `pac_length_clamp` and of the shared keys; each tool's README lists what its levels
+    do, and says what a privacy level costs under `resources = minimal`.
 
 ## Safe, and respectful
 
