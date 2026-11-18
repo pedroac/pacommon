@@ -138,7 +138,11 @@ with a window has at least one screenshot, taken by a person, and retaken when t
   [decisions.md](decisions.md).
 - Before adding a library to a tool, ask whether a program that is run could do the work
   (principle 3). pacreact's `rsvg-convert` and `pw-play` are the examples.
-- No Wayland, no Cairo, no FreeType. Logic that needs those belongs in the tool.
+- A file here may need a library, but never imposes it: only the tools that list the file compile
+  it, and a feature with a cost has a build switch (`textlayout.c` needs FreeType, and HarfBuzz and
+  FriBidi unless built with `NO_I18N`; `textdraw.c` also needs Cairo). What belongs in a tool is what only that tool does, not what
+  two tools do the same way. No Wayland code is written here yet, but it is not ruled out: the tools
+  depend on Wayland by design (see the 2026-11-18 entry in [decisions.md](decisions.md)).
 - Text is plain and says what to do (principle 32). Anything a person is told is also something a
   speech backend can say, so it is a string, not only a picture.
 - User-visible messages go through `_()` (see `config_file.c` for how the tool's `i18n.h` is

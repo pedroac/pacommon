@@ -23,7 +23,9 @@ container (`tests/distros.sh docker.io/library/alpine:latest` for one). Update t
 from its output, with the date. A distribution that fails is a bug to fix here, or a limit to
 write in the next section.
 
-Speech (`SPEECH=speechd`) has been tested by the author with speech-dispatcher 0.12.1, on Arch Linux. Other
+Speech (`SPEECH=speechd`) has been tested by the author with speech-dispatcher 0.12.1, on Arch Linux, with espeak-ng installed and Piper set as the default module (the engine is the person's choice in `speechd.conf`: both are on that machine, and which one spoke in each test was not recorded). To be heard, speech needs more than the library: a **speech-dispatcher** server and a **speech engine** (a speech-dispatcher module) with a voice, such as **espeak-ng** (small, offline, many languages; an optional dependency of speech-dispatcher on Arch, where it is the usual choice), or Piper or Festival, and a sound server (PulseAudio or PipeWire). Without an engine the server has nothing to speak with.
+
+The build needs `libspeechd` (speech-dispatcher's client library); a distribution that packages it separately (Debian's `libspeechd-dev`) has to be told. A person who needs speech must install an engine themselves unless the distribution's packaging of the tools pulls one in: **no pac tool installs or checks one**, so a system with the server and no engine is silent, and nothing says so. Other
 speech-dispatcher versions and distributions are *untested*; `SPEECH=atspi` does not exist yet.
 
 ## What the code assumes

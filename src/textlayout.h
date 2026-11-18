@@ -43,11 +43,16 @@ typedef struct {
     uint32_t glyph;              /* the glyph of that face */
     double x, y;                 /* where to draw it, in em: x from the left end of the line, y from the
                                   * baseline (down is positive, as in Cairo) */
+    double pen, advance;         /* the space it takes along the line, in em from its left end (x and y can be moved
+                                  * from it by marks): what the caret is placed by */
+    uint16_t cluster;            /* the first character (not byte) of the text that it is a glyph of */
+    uint8_t level;               /* of its run in the bidirectional algorithm: odd is right to left */
 } PacTextGlyph;
 
 typedef struct {
     PacTextGlyph glyphs[PAC_TEXT_GLYPHS_MAX];   /* in visual order, from left to right */
     size_t count;
+    size_t chars;                /* how many characters of the text were laid out (all but what did not fit) */
     double width;                /* in em */
     bool rtl;                    /* the direction of the paragraph that was used */
 } PacTextLine;
@@ -61,6 +66,16 @@ bool pac_text_language_rtl(const char *language);
 /* Lays out one line (no line breaks in it). Sizes are in em: multiply by the font size. False if
  * `fallback` is NULL or the text is empty (count and width are then 0). */
 bool pac_text_layout(const PacTextOptions *o, const char *utf8, PacTextLine *out);
+
+/* Where a caret goes at byte offset `at` of utf8 (a boundary between characters; a larger offset is the end):
+ * its x in em from the left end of the line, which is where pac_text_layout puts x = 0. Found from the layout
+ * itself, so that it is right in a line that mixes directions: at the end of the character before it, which is
+ * its right side in a left-to-right run and its left side in a right-to-left one (at the start of the text,
+ * the start of the first). Returns the direction the text goes from there, +1 to the right and -1 to the left
+ * (what a letter typed there, of the direction of the one before, would do), or 0 if the text is empty or
+ * could not be laid out (x is then 0). There is one caret, as a person who types sees: at a place where two
+ * runs meet, the one of the character before. */
+int pac_text_caret(const PacTextOptions *o, const char *utf8, size_t at, double *x_em);
 
 /* How many bytes of utf8 (one paragraph) fit in max_em: the longest start of it that does, cut where
  * the script allows a line to end (after a space or a hyphen, between ideographs), else after the last

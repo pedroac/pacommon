@@ -13,6 +13,29 @@
  * Features that are switched on or off when building (SPEECH, I18N, ...) belong to each tool's own
  * tunables.h, with its sizes. pacommon has one: -DPACOMMON_I18N='"i18n.h"' (config_file.c). */
 
+/* ---- language, atomic_file ---- */
+
+/* The longest language list pac_set_language takes, in bytes ("pt_BR:pt" is 8). */
+#ifndef PAC_LANGUAGE_MAX
+#define PAC_LANGUAGE_MAX 63
+#endif
+/* The longest path atomic_write takes, in bytes, including the end. */
+#ifndef PAC_FILE_PATH_MAX
+#define PAC_FILE_PATH_MAX 1024
+#endif
+
+/* ---- layout ---- */
+
+/* The most keyboard layouts a LayoutPicker and layouts_load hold (xkeyboard-config has about 250). */
+#ifndef MAX_LAYOUTS
+#define MAX_LAYOUTS 256
+#endif
+/* The largest xkeyboard-config rules list that is read, in bytes. A real evdev.lst is about
+ * 100 KiB; a bigger file is a mistake, and a pipe or a device is never read. */
+#ifndef LAYOUT_LIST_MAX
+#define LAYOUT_LIST_MAX (1 << 20)
+#endif
+
 /* ---- config_file ---- */
 
 /* Where the system-wide settings are. A distribution that keeps them elsewhere sets this. */
@@ -93,6 +116,17 @@
 
 /* ---- field ---- */
 
+/* Bytes of what an input method is composing in a Field (the preedit: text that is shown but is not yet part of it),
+ * ending included. What does not fit is cut at a character. */
+#ifndef FIELD_PREEDIT_MAX
+#define FIELD_PREEDIT_MAX 256
+#endif
+/* The most bytes taken from one string of an input method (a preedit or a commit); a Wayland message is at most
+ * 4096 bytes. Longer is refused. */
+#ifndef PAC_TEXTINPUT_TEXT_MAX
+#define PAC_TEXTINPUT_TEXT_MAX 1024
+#endif
+
 /* Bytes in a Field, ending included, and so at most FIELD_MAX - 1 characters of a password. */
 #ifndef FIELD_MAX
 #define FIELD_MAX 512
@@ -138,7 +172,11 @@ _Static_assert(PAC_SETTING_KEY_MAX >= 1 && PAC_SETTING_VALUE_MAX >= 0 &&
                PAC_SETTING_POOL >= PAC_SETTING_KEY_MAX + PAC_SETTING_VALUE_MAX + 2,
                "PAC_SETTING_POOL must hold at least one setting of the largest size");
 _Static_assert(PAC_SPEECH_PART_MAX >= 32, "PAC_SPEECH_PART_MAX is too small");
+_Static_assert(PAC_LANGUAGE_MAX >= 5 && PAC_FILE_PATH_MAX >= 32, "the language or file path limit is too small");
+_Static_assert(MAX_LAYOUTS > 0 && LAYOUT_LIST_MAX > 0, "the layout limits must be positive");
 _Static_assert(FIELD_MAX >= 16 && FIELD_MAX <= 65536, "FIELD_MAX is out of range");
+_Static_assert(FIELD_PREEDIT_MAX >= 16 && FIELD_PREEDIT_MAX <= 4096 && PAC_TEXTINPUT_TEXT_MAX >= 16 && PAC_TEXTINPUT_TEXT_MAX <= 4096,
+               "the input method limits are out of range");
 _Static_assert(FONT_MAX_DIRS >= 1 && FONT_DIR_MAX >= 32 && FONT_PATH_MAX >= 32 && FONT_WALK_FDS >= 1,
                "the font search limits are too small");
 

@@ -14,9 +14,15 @@ Not a library to install: each tool's `Makefile` compiles the files it needs fro
 | `pac.mk` | Install rules for the tools' Makefiles: keep what is there, `REPLACE=1` to replace | all |
 | `src/tunables.h` | Every size, limit and default, changeable with `-DNAME=value` | all |
 | `src/compiler.h` | `PAC_LIKELY`, `PAC_UNLIKELY`, `PAC_COLD` for GCC and Clang, for code a profile shows is hot | any |
-| `src/field.[ch]` | A line of text edited at its end, remembering which key typed each character | pacgreet, paclock |
+| `src/field.[ch]` | A line of text edited at its end, remembering which key typed each character, and the keys that edit it | pacgreet, paclock |
 | `src/speech.[ch]` | Speaks what a tool shows, through speech-dispatcher (`SPEECH=speechd`), or nothing (`SPEECH=none`) | paclock |
 | `src/palette.[ch]` | The colors every tool shares (normal and high contrast), with the checks of principle 33 | pacgreet, paclock |
+| `src/layout.[ch]`, `src/layout_detect.[ch]` | Keyboard layouts: the list xkeyboard-config has, `us(intl)` specs, the picker that searches and steps through them; and the layout the system says it has (`layout_detect`, for a greeter) | pacgreet, paclock |
+| `src/layout_text.[ch]` | The words of the layout picker, shown and said ("Type to search", "No keyboard matches", "Portuguese keyboard") | pacgreet, paclock |
+| `src/textdraw.[ch]` | Draws and measures text with Cairo right in every script: finds the font of each letter (the main one, else the one of its script) and draws what `textlayout` shapes; fits a line with an ellipsis, cuts one to wrap it | pacgreet, paclock, pacmenu |
+| `src/utf8.[ch]` | Decodes one strictly valid UTF-8 sequence | pacpeek, pacreact |
+| `src/language.[ch]` | Sets the language of the texts whatever the environment says (`pac_set_language`) | pacgreet, paclock, pacpeek, pacreact |
+| `src/atomic_file.[ch]` | Writes a file so that a crash never leaves half of it (`atomic_write`) | pacgreet, pacmenu |
 
 ## Build and test
 

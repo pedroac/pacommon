@@ -1,5 +1,6 @@
 #define _DEFAULT_SOURCE
 #include "field.h"
+#include "utf8.h"
 #include <string.h>
 
 void field_clear(Field *f) {
@@ -68,6 +69,49 @@ void field_backspace(Field *f) {
     explicit_bzero(&f->typed[f->count], sizeof(Typed));
 }
 
+void field_clear_preedit(Field *f) {
+    explicit_bzero(f->preedit, sizeof(f->preedit));
+    f->preedit_len = 0;
+    f->preedit_begin = f->preedit_end = -1;
+}
+
+const char *field_preedit(const Field *f) {
+    return f->preedit_len < FIELD_PREEDIT_MAX && f->preedit[f->preedit_len] == '\0' ? f->preedit : "";
+}
+
+/* Whether byte offset `at` of s (n bytes) is the start of a character, or the end. */
+static bool on_boundary(const char *s, size_t n, size_t at) {
+    return at == n || (at < n && ((unsigned char)s[at] & 0xC0) != 0x80);
+}
+
+bool field_set_preedit(Field *f, const char *utf8, int begin, int end) {
+    field_clear_preedit(f);
+    if (!utf8 || !utf8[0]) return true;
+    size_t n = strlen(utf8);
+    if (n > FIELD_PREEDIT_MAX - 1) {                    /* cut at a character, the last that fits */
+        n = FIELD_PREEDIT_MAX - 1;
+        while (n > 0 && !on_boundary(utf8, strlen(utf8), n)) n--;
+    }
+    if (n == 0 || !utf8_plain(utf8, n)) return n == 0;
+    memcpy(f->preedit, utf8, n);
+    f->preedit_len = n;
+    bool ok = begin >= 0 && end >= begin && (size_t)end <= n && on_boundary(f->preedit, n, (size_t)begin) &&
+              on_boundary(f->preedit, n, (size_t)end);
+    f->preedit_begin = ok ? begin : -1;
+    f->preedit_end = ok ? end : -1;
+    return true;
+}
+
+size_t field_delete_before(Field *f, size_t bytes) {
+    if (!sane(f)) field_clear(f);
+    size_t removed = 0;
+    while (f->count > 0 && removed + f->typed[f->count - 1].len <= bytes) {
+        removed += f->typed[f->count - 1].len;
+        field_backspace(f);
+    }
+    return removed;
+}
+
 size_t field_chars(const Field *f) {
     return f->count;
 }
@@ -122,4 +166,27 @@ bool field_retype(Field *f, FieldTranslate translate, void *data) {
     explicit_bzero(text, sizeof(text));
     explicit_bzero(typed, sizeof(typed));
     return changed;
+}
+
+/* X11 keysyms (xkbcommon-keysyms.h, fixed by the protocol), written out so that this file needs no library. */
+#define KEYSYM_BACKSPACE 0xff08
+#define KEYSYM_U_LOWER 0x75
+#define KEYSYM_U_UPPER 0x55
+
+FieldKey field_edit_key(Field *f, const FieldKeyEvent *e, size_t max) {
+    if (!sane(f)) field_clear(f);
+    size_t before = f->len;
+    bool ctrl = e->held & FIELD_CTRL;
+
+    if (e->keysym == KEYSYM_BACKSPACE || (ctrl && (e->keysym == KEYSYM_U_LOWER || e->keysym == KEYSYM_U_UPPER))) {
+        if (e->keysym != KEYSYM_BACKSPACE || ctrl) field_clear(f);
+        else field_backspace(f);
+        return f->len != before ? FIELD_KEY_EDITED : FIELD_KEY_IGNORED;
+    }
+
+    if (e->held & (FIELD_CTRL | FIELD_ALT | FIELD_LOGO)) return FIELD_KEY_IGNORED;
+    if (!e->text || (unsigned char)e->text[0] < 0x20 || (unsigned char)e->text[0] == 0x7f) return FIELD_KEY_IGNORED;
+    if (max == 0 || max > FIELD_MAX - 1) max = FIELD_MAX - 1;
+    if (f->len > max || strlen(e->text) > max - f->len) return FIELD_KEY_FULL;
+    return field_append_key(f, e->text, e->key, e->mods) ? FIELD_KEY_EDITED : FIELD_KEY_FULL;
 }

@@ -41,7 +41,7 @@ bool pac_config_bool(const char *value, bool *out);
 #define PAC_SHARED_CONFIG "pac"
 
 /* True for the keys that pac.conf may hold: contrast, text_scale, font, language, icons, theme,
- * speech and braille_table. */
+ * speech, reduce_motion and braille_table. */
 bool pac_config_shared_key(const char *key);
 
 /* The shared files, from the lowest priority to the highest. A key that is not a shared one, or

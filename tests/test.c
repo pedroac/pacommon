@@ -1,18 +1,26 @@
 /* Unit tests for the shared code. None of it needs a display. */
 #define _GNU_SOURCE
+#include "atomic_file.h"
 #include "config_file.h"
 #include "field.h"
 #include "fontfind.h"
+#include "language.h"
+#include "layout.h"
+#include "layout_detect.h"
+#include "layout_text.h"
 #include "length.h"
 #include "palette.h"
 #include "setting.h"
+#include "textinput.h"
 #include "speech.h"
+#include "utf8.h"
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <locale.h>
 #include <sys/stat.h>
@@ -259,6 +267,74 @@ static void test_field(void) {
     CHECK(f.text[0] == '\0' && f.len == 0 && f.count == 0);
 }
 
+static FieldKey press_key(Field *f, uint32_t keysym, const char *text, unsigned held, size_t max) {
+    return field_edit_key(f, &(FieldKeyEvent){ keysym, text, 30, 4, held }, max);
+}
+
+static void test_field_edit_key(void) {
+    enum { BACKSPACE = 0xff08, ESCAPE = 0xff1b };
+    Field f;
+    field_clear(&f);
+    CHECK(press_key(&f, 'a', "a", 0, 0) == FIELD_KEY_EDITED && f.len == 1);
+    CHECK(f.typed[0].key == 30 && f.typed[0].mods == 4);               /* kept, so it can be retyped */
+    CHECK(press_key(&f, 0, "\xC3\xA9", 0, 0) == FIELD_KEY_EDITED && field_chars(&f) == 2);
+    CHECK(press_key(&f, 'A', "A", 0, 0) == FIELD_KEY_EDITED);          /* shift is not a modifier here */
+    CHECK_STR(f.text, "a\xC3\xA9" "A");
+    CHECK(press_key(&f, BACKSPACE, "\b", 0, 0) == FIELD_KEY_EDITED && field_chars(&f) == 2);
+    CHECK(press_key(&f, BACKSPACE, "\b", FIELD_ALT, 0) == FIELD_KEY_EDITED && field_chars(&f) == 1);   /* one character */
+    CHECK(press_key(&f, 'b', "b", 0, 0) == FIELD_KEY_EDITED);
+    CHECK(press_key(&f, BACKSPACE, "\b", FIELD_CTRL, 0) == FIELD_KEY_EDITED && f.len == 0);   /* all of it */
+
+    /* Nothing to change is not an edit, so a caller does not redraw or reset anything for it. */
+    CHECK(press_key(&f, BACKSPACE, "\b", 0, 0) == FIELD_KEY_IGNORED);
+    CHECK(press_key(&f, BACKSPACE, "\b", FIELD_CTRL, 0) == FIELD_KEY_IGNORED);
+    CHECK(press_key(&f, 'u', "u", FIELD_CTRL, 0) == FIELD_KEY_IGNORED);
+
+    CHECK(press_key(&f, 'x', "xyz", 0, 0) == FIELD_KEY_EDITED);
+    CHECK(press_key(&f, 'U', "\x15", FIELD_CTRL, 0) == FIELD_KEY_EDITED && f.len == 0);   /* Ctrl+U, either case */
+    CHECK(press_key(&f, 'x', "xyz", 0, 0) == FIELD_KEY_EDITED);
+    CHECK(press_key(&f, 'u', "\x15", FIELD_CTRL, 0) == FIELD_KEY_EDITED && f.len == 0);
+
+    /* What is not text: a shortcut, a control character, DEL, nothing, a key with no text. */
+    CHECK(press_key(&f, 'a', "a", FIELD_CTRL, 0) == FIELD_KEY_IGNORED);
+    CHECK(press_key(&f, 'a', "a", FIELD_ALT, 0) == FIELD_KEY_IGNORED);
+    CHECK(press_key(&f, 'a', "a", FIELD_LOGO, 0) == FIELD_KEY_IGNORED);
+    CHECK(press_key(&f, 'u', "u", FIELD_ALT, 0) == FIELD_KEY_IGNORED);   /* only Ctrl+U clears; Alt+U is a shortcut */
+    CHECK(press_key(&f, 'c', "\x03", 0, 0) == FIELD_KEY_IGNORED);
+    CHECK(press_key(&f, ESCAPE, "\x1b", 0, 0) == FIELD_KEY_IGNORED);
+    CHECK(press_key(&f, 0, "\x7f", 0, 0) == FIELD_KEY_IGNORED);
+    CHECK(press_key(&f, 0, "", 0, 0) == FIELD_KEY_IGNORED);
+    CHECK(press_key(&f, 0, NULL, 0, 0) == FIELD_KEY_IGNORED);
+    CHECK(f.len == 0);                                                  /* none of them changed it */
+    CHECK(press_key(&f, 'u', "u", 0, 0) == FIELD_KEY_EDITED);           /* a plain u is a letter */
+    CHECK_STR(f.text, "u");
+    field_clear(&f);
+
+    /* A limit of the tool's own: up to max bytes, and a character that does not fit is refused whole. */
+    CHECK(press_key(&f, 'a', "ab", 0, 3) == FIELD_KEY_EDITED);
+    CHECK(press_key(&f, 'c', "\xC3\xA9", 0, 3) == FIELD_KEY_FULL && f.len == 2);   /* 2 + 2 > 3 */
+    CHECK(press_key(&f, 'c', "c", 0, 3) == FIELD_KEY_EDITED && f.len == 3);
+    CHECK(press_key(&f, 'd', "d", 0, 3) == FIELD_KEY_FULL && f.len == 3);
+    CHECK(press_key(&f, BACKSPACE, "\b", 0, 3) == FIELD_KEY_EDITED && f.len == 2);   /* a full field still deletes */
+    CHECK(press_key(&f, 'd', "d", 0, 1) == FIELD_KEY_FULL && f.len == 2);   /* already longer than the limit */
+    field_clear(&f);
+
+    /* The size of a Field is the limit when there is none, or when a bigger one is asked for. */
+    for (size_t i = 0; i < FIELD_MAX - 1; i++) CHECK(press_key(&f, 'a', "a", 0, 0) == FIELD_KEY_EDITED);
+    CHECK(f.len == FIELD_MAX - 1 && f.text[f.len] == '\0');
+    CHECK(press_key(&f, 'a', "a", 0, 0) == FIELD_KEY_FULL);
+    CHECK(press_key(&f, 'a', "a", 0, FIELD_MAX * 4) == FIELD_KEY_FULL);
+    CHECK(f.len == FIELD_MAX - 1);
+    CHECK(press_key(&f, 'a', "\xE2\x82\xAC", 0, 0) == FIELD_KEY_FULL && f.len == FIELD_MAX - 1);
+    CHECK(press_key(&f, 'u', "\x15", FIELD_CTRL, 0) == FIELD_KEY_EDITED && f.len == 0);
+
+    /* A field that was written to directly is wiped, not trusted. */
+    memset(&f, 0x41, sizeof f);
+    CHECK(press_key(&f, 'a', "a", 0, 0) == FIELD_KEY_EDITED && f.len == 1 && f.count == 1);
+    CHECK_STR(f.text, "a");
+    field_clear(&f);
+}
+
 static void test_field_retype(void) {
     Field f;
     field_clear(&f);
@@ -423,7 +499,7 @@ static void test_config_bool(void) {
 }
 
 static void test_config_shared(void) {
-    CHECK(pac_config_shared_key("text_scale") && pac_config_shared_key("braille_table"));
+    CHECK(pac_config_shared_key("text_scale") && pac_config_shared_key("braille_table") && pac_config_shared_key("reduce_motion"));
     CHECK(!pac_config_shared_key("window_width") && !pac_config_shared_key("") && !pac_config_shared_key(NULL));
 
     char dir[300], cwd[300];
@@ -495,7 +571,7 @@ static void test_pac_conf_example(void) {
     if (!f) { fprintf(report, "FAIL pac.conf not found (run from the pacommon folder)\n"); failures++; return; }
     static const char *const keys[] = { "contrast", "text_scale", "text_size_min", "text_size_max", "font",
                                         "language", "icons", "theme", "speech", "resources", "privacy",
-                                        "braille_table" };
+                                        "braille_table", "reduce_motion" };
     enum { KEYS = sizeof keys / sizeof keys[0] };
     int seen[KEYS] = { 0 }, lines = 0;
     char line[512], out[300];
@@ -707,6 +783,527 @@ static void test_fontfind_guards(void) {
     CHECK(d.list[1] == NULL);
 }
 
+/* ---- the preedit of a field, and what an input method does to it ---- */
+
+static void test_field_preedit(void) {
+    Field f;
+    field_clear(&f);
+    CHECK_STR(field_preedit(&f), "");
+    CHECK(field_append(&f, "ab"));
+    CHECK(field_set_preedit(&f, "\xE3\x81\x82\xE3\x81\x84", 3, 6));            /* two kana, the cursor on the second */
+    CHECK_STR(field_preedit(&f), "\xE3\x81\x82\xE3\x81\x84");
+    CHECK(f.preedit_begin == 3 && f.preedit_end == 6);
+    CHECK_STR(f.text, "ab");                                                    /* shown after the text, not part of it */
+    CHECK(field_chars(&f) == 2);
+    CHECK(field_set_preedit(&f, "x", 1, 1) && f.preedit_begin == 1 && f.preedit_end == 1);   /* replaced, never added */
+    CHECK_STR(field_preedit(&f), "x");
+    CHECK(field_set_preedit(&f, "", -1, -1) && field_preedit(&f)[0] == '\0');   /* an empty one clears */
+    CHECK(field_set_preedit(&f, "abc", -1, -1) && f.preedit_begin == -1 && f.preedit_end == -1);   /* no cursor shown */
+    field_clear_preedit(&f);
+    CHECK_STR(field_preedit(&f), "");
+
+    /* A cursor that does not fit the text is none: out of it, backwards, or in the middle of a character. */
+    CHECK(field_set_preedit(&f, "\xC3\xA9" "a", 5, 5) && f.preedit_begin == -1);
+    CHECK(field_set_preedit(&f, "\xC3\xA9" "a", 2, 1) && f.preedit_begin == -1);
+    CHECK(field_set_preedit(&f, "\xC3\xA9" "a", 1, 1) && f.preedit_begin == -1);      /* inside the two-byte letter */
+    CHECK(field_set_preedit(&f, "\xC3\xA9" "a", -3, 1) && f.preedit_begin == -1);
+    CHECK(field_set_preedit(&f, "\xC3\xA9" "a", 3, 3) && f.preedit_begin == 3 && f.preedit_end == 3);   /* the end is fine */
+
+    /* What is not text is refused, and leaves no preedit: bad UTF-8, a control character, a truncated sequence. */
+    CHECK(!field_set_preedit(&f, "a\xFF" "b", 0, 0) && field_preedit(&f)[0] == '\0');
+    CHECK(!field_set_preedit(&f, "a\nb", 0, 0) && field_preedit(&f)[0] == '\0');
+    CHECK(!field_set_preedit(&f, "a\x7f", 0, 0) && field_preedit(&f)[0] == '\0');
+    CHECK(!field_set_preedit(&f, "\xE3\x81", 0, 0) && field_preedit(&f)[0] == '\0');
+    CHECK(!field_set_preedit(&f, "\xC0\x80", 0, 0));                           /* an overlong NUL */
+    CHECK(field_set_preedit(&f, NULL, 0, 0) && field_preedit(&f)[0] == '\0');
+
+    /* Too long: cut at a character, never in the middle of one, and never past the buffer. */
+    char big[FIELD_PREEDIT_MAX * 2];
+    for (size_t i = 0; i + 3 <= sizeof big - 1; i += 3) memcpy(big + i, "\xE3\x81\x82", 3);
+    big[(sizeof big - 1) / 3 * 3] = '\0';
+    CHECK(field_set_preedit(&f, big, 0, 0));
+    size_t n = strlen(field_preedit(&f));
+    CHECK(n > 0 && n < FIELD_PREEDIT_MAX && n % 3 == 0 && f.preedit_len == n);
+
+    /* It is wiped with the field, since a field may have held a password. */
+    CHECK(field_set_preedit(&f, "secret", 0, 6));
+    field_clear(&f);
+    CHECK_STR(field_preedit(&f), "");
+    bool zero = true;
+    for (size_t i = 0; i < sizeof f.preedit; i++) zero = zero && f.preedit[i] == 0;
+    CHECK(zero);
+
+    /* A field written to directly is not trusted: no unterminated preedit is read. */
+    memset(f.preedit, 'x', sizeof f.preedit);
+    f.preedit_len = sizeof f.preedit - 1;
+    CHECK_STR(field_preedit(&f), "");                                           /* not terminated: ignored */
+    field_clear(&f);
+
+    /* Deleting from the end: whole characters, and never more than asked. */
+    CHECK(field_append(&f, "a\xC3\xA9\xE2\x82\xAC"));                           /* 1, 2 and 3 bytes */
+    CHECK(field_delete_before(&f, 2) == 0);                                     /* the euro sign is three bytes: not cut */
+    CHECK(field_delete_before(&f, 3) == 3 && f.len == 3 && field_chars(&f) == 2);
+    CHECK(field_delete_before(&f, 100) == 3 && f.len == 0);
+    CHECK(field_delete_before(&f, 5) == 0);                                     /* nothing left */
+}
+
+typedef struct { char log[512]; Field *field; } Sink;
+
+static void sink_preedit(void *data, const char *t, int b, int e) {
+    Sink *s = data;
+    snprintf(s->log + strlen(s->log), sizeof s->log - strlen(s->log), "P[%s,%d,%d]", t, b, e);
+    if (s->field) field_set_preedit(s->field, t, b, e);
+}
+static void sink_commit(void *data, const char *t) {
+    Sink *s = data;
+    snprintf(s->log + strlen(s->log), sizeof s->log - strlen(s->log), "C[%s]", t);
+    if (s->field) field_append(s->field, t);
+}
+static void sink_delete(void *data, size_t n) {
+    Sink *s = data;
+    snprintf(s->log + strlen(s->log), sizeof s->log - strlen(s->log), "D[%zu]", n);
+    if (s->field) field_delete_before(s->field, n);
+}
+
+static void test_textinput(void) {
+    static const PacTextInputSink ops = { sink_preedit, sink_commit, sink_delete };
+    PacTextInputPending p;
+    Sink s = { "", NULL };
+    pac_textinput_pending_reset(&p);
+
+    /* Nothing pending: nothing happens. */
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(s.log, "");
+
+    /* The order of the protocol: the old preedit goes, the deletion, the commit, and then the new preedit, whatever
+     * order the events came in. */
+    pac_textinput_pending_preedit(&p, "ni", 2, 2);
+    pac_textinput_pending_commit(&p, "\xE4\xBD\xA0");
+    pac_textinput_pending_delete(&p, 3, 0);
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(s.log, "P[,-1,-1]D[3]C[\xE4\xBD\xA0]P[ni,2,2]");
+
+    /* It was reset: a second `done` does nothing. */
+    s.log[0] = '\0';
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(s.log, "");
+
+    /* An empty preedit event removes the one that was there; a commit alone also removes it. */
+    pac_textinput_pending_preedit(&p, "", -1, -1);
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(s.log, "P[,-1,-1]");
+    s.log[0] = '\0';
+    pac_textinput_pending_commit(&p, "ok");
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(s.log, "P[,-1,-1]C[ok]");
+
+    /* Against a field: compose, commit, compose again, and the text only changes at the commit. */
+    Field f;
+    field_clear(&f);
+    s = (Sink){ "", &f };
+    pac_textinput_pending_preedit(&p, "ka", 2, 2);
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(f.text, "") ; CHECK_STR(field_preedit(&f), "ka");
+    pac_textinput_pending_preedit(&p, "kan", 3, 3);                              /* the next state replaces it */
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(field_preedit(&f), "kan");
+    pac_textinput_pending_commit(&p, "\xE6\xBC\xA2");
+    pac_textinput_pending_preedit(&p, "", -1, -1);
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(f.text, "\xE6\xBC\xA2") ; CHECK_STR(field_preedit(&f), "");
+    pac_textinput_pending_delete(&p, 3, 99);                                     /* what is after is not asked for */
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK(f.len == 0);
+
+    /* What comes from outside: refused whole, never half. */
+    s = (Sink){ "", NULL };
+    pac_textinput_pending_commit(&p, "a\xFF" "b");
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(s.log, "");                                                        /* nothing to commit */
+    pac_textinput_pending_commit(&p, "line\nbreak");
+    pac_textinput_pending_preedit(&p, "\x01", 0, 0);
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(s.log, "P[,-1,-1]");                                               /* the preedit event still removes the old */
+    char big[PAC_TEXTINPUT_TEXT_MAX + 10];
+    memset(big, 'a', sizeof big - 1);
+    big[sizeof big - 1] = '\0';
+    s.log[0] = '\0';
+    pac_textinput_pending_commit(&p, big);
+    pac_textinput_pending_preedit(&p, big, 0, 0);
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(s.log, "P[,-1,-1]");                                               /* too long: refused */
+    big[PAC_TEXTINPUT_TEXT_MAX - 1] = '\0';                                      /* the longest that fits */
+    s.log[0] = '\0';
+    pac_textinput_pending_commit(&p, big);
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK(strncmp(s.log, "P[,-1,-1]C[aaaa", 15) == 0);                            /* delivered (the log is shorter than it) */
+    /* A cursor that does not fit the text is passed on as none. */
+    s.log[0] = '\0';
+    pac_textinput_pending_preedit(&p, "ab", 5, 1);
+    pac_textinput_apply(&p, &ops, &s);
+    CHECK_STR(s.log, "P[,-1,-1]P[ab,-1,-1]");
+    /* A NULL sink or a NULL text is tolerated. */
+    pac_textinput_pending_commit(&p, NULL);
+    pac_textinput_pending_preedit(&p, NULL, 0, 0);
+    pac_textinput_apply(&p, NULL, &s);
+    pac_textinput_apply(&p, &ops, &s);
+}
+
+/* ---- layout: keyboard layouts, the picker and detecting the system's ---- */
+
+static void test_layout_spec(void) {
+    Layout l;
+    CHECK(layout_parse_spec("us(intl)", &l));
+    CHECK_STR(l.layout, "us"); CHECK_STR(l.variant, "intl"); CHECK_STR(l.name, "us(intl)");
+    CHECK(layout_parse_spec("us (intl)", &l));           /* a space before the variant */
+    CHECK_STR(l.layout, "us"); CHECK_STR(l.variant, "intl"); CHECK_STR(l.name, "us (intl)");
+    CHECK(layout_parse_spec("pt   ", &l));                /* no trailing space in the name */
+    CHECK_STR(l.layout, "pt"); CHECK_STR(l.variant, ""); CHECK_STR(l.name, "pt");
+    CHECK(layout_parse_spec("  de(nodeadkeys)  ", &l));
+    CHECK_STR(l.variant, "nodeadkeys"); CHECK_STR(l.name, "de(nodeadkeys)");
+    CHECK(layout_parse_spec(" us(intl) ", &l));
+    CHECK_STR(l.layout, "us"); CHECK_STR(l.variant, "intl");
+    char spec[32];
+    layout_spec(&l, spec, sizeof spec);
+    CHECK_STR(spec, "us(intl)");
+    CHECK(layout_parse_spec("pt", &l) && l.variant[0] == '\0');
+    layout_spec(&l, spec, sizeof spec);
+    CHECK_STR(spec, "pt");
+    CHECK(!layout_parse_spec("", &l) && !layout_parse_spec("us(", &l) && !layout_parse_spec("us()", &l));
+    CHECK(!layout_parse_spec("(intl)", &l) && !layout_parse_spec("   ", &l) && !layout_parse_spec("us(intl", &l));
+
+    /* Too long for the fields: refused, never cut or overflowed. */
+    char big[300];
+    memset(big, 'a', sizeof big - 1);
+    big[sizeof big - 1] = '\0';
+    CHECK(!layout_parse_spec(big, &l));                   /* a layout code of 299 characters */
+    char longvariant[400];
+    snprintf(longvariant, sizeof longvariant, "us(%s)", big);
+    CHECK(!layout_parse_spec(longvariant, &l));
+    snprintf(longvariant, sizeof longvariant, "us(%.*s)", (int)sizeof l.variant, big);       /* too long for the variant's field */
+    CHECK(!layout_parse_spec(longvariant, &l));
+    snprintf(longvariant, sizeof longvariant, "us(%.*s)", (int)sizeof l.variant - 1, big);   /* the longest that fits */
+    CHECK(layout_parse_spec(longvariant, &l) && strlen(l.variant) == sizeof l.variant - 1);
+    snprintf(longvariant, sizeof longvariant, "us(intl)%s", big);                           /* the name stays inside its field */
+    CHECK(layout_parse_spec(longvariant, &l) && strlen(l.name) < sizeof l.name);
+}
+
+static void test_layout_list(void) {
+    Layout l[8];
+    int n = layouts_parse_list("! model\n  pc105  Generic\n\n! layout\n  al              Albanian\n"
+                               "  pt              Portuguese\n  us              English (US)\n\n"
+                               "! variant\n  intl  us: English (US, intl.)\n", l, 8);
+    CHECK(n == 3);
+    CHECK_STR(l[0].layout, "al"); CHECK_STR(l[1].layout, "pt");
+    CHECK_STR(l[1].name, "Portuguese");
+    CHECK_STR(l[2].name, "English (US)");
+    CHECK(l[2].variant[0] == '\0');
+    /* the placeholder for a layout the user writes is not offered */
+    CHECK(layouts_parse_list("! layout\n  us   English (US)\n  custom   A user-defined custom Layout\n", l, 8) == 1);
+    /* only the "! layout" section, not another one that starts alike, or a variant's lines */
+    CHECK(layouts_parse_list("! layouts\n  zz  Nowhere\n! variant\n  intl  x\n", l, 8) == 0);
+    CHECK(layouts_parse_list("", l, 8) == 0 && layouts_parse_list("! layout\n", l, 8) == 0);
+    /* hostile lists: the count never goes past max, a line longer than the buffer is cut, a name too long is cut */
+    CHECK(layouts_parse_list("! layout\n  a A\n  b B\n  c C\n", l, 2) == 2);
+    CHECK(layouts_parse_list("! layout\n  a A\n", l, 0) == 0);
+    char list[1200] = "! layout\n  xx  ";
+    memset(list + strlen(list), 'N', 600);
+    strcpy(list + strlen(list), "\n  yy  Short\n");
+    n = layouts_parse_list(list, l, 8);
+    CHECK(n >= 1 && strlen(l[0].name) < sizeof l[0].name && strlen(l[0].layout) < sizeof l[0].layout);
+    CHECK(layouts_parse_list("! layout\n  \t \n   \n  nameless\n", l, 8) == 1);
+    CHECK_STR(l[0].name, "nameless");                       /* no description: the code is the name */
+
+    /* configured layouts are described like the list describes them; this reads the system's list, if any */
+    n = layouts_load(l, 8, "pt, us(intl)");
+    CHECK(n == 2);
+    CHECK_STR(l[0].layout, "pt"); CHECK_STR(l[1].variant, "intl");
+    CHECK(layouts_load(l, 8, "pt, , (bad), us") == 2);       /* what cannot be read is skipped */
+    CHECK(layouts_load(l, 1, "pt,us,de") == 1);
+    CHECK(layouts_load(l, 8, NULL) <= 8);                    /* every layout the system knows, at most max */
+    CHECK_STR(pac_layout_name("Not a layout"), "Not a layout");
+    const char *portuguese = pac_layout_name("Portuguese");  /* from the system's xkeyboard-config, where it has the language */
+    CHECK(portuguese && portuguese[0]);
+}
+
+static void test_picker(void) {
+    static LayoutPicker p;
+    memset(&p, 0, sizeof(p));
+    const char *names[] = { "", "Arabic", "English (US)", "Portuguese", "Portuguese (Brazil)" };
+    const char *codes[] = { "", "ara", "us", "pt", "br" };
+    p.count = 5;
+    for (int i = 0; i < p.count; i++) {
+        snprintf(p.items[i].name, sizeof(p.items[i].name), "%s", names[i]);
+        snprintf(p.items[i].layout, sizeof(p.items[i].layout), "%s", codes[i]);
+    }
+
+    /* without a search, left and right go through all of them, the compositor's first */
+    CHECK(picker_step(&p, 1) == 1);
+    p.current = 4;
+    CHECK(picker_step(&p, 1) == 0);
+    CHECK(picker_step(&p, -1) == 3);
+
+    /* going round: from the last layout to the first, and back */
+    p.current = 4;
+    CHECK(picker_step(&p, 1) == 0);
+    CHECK(picker_step(&p, -1) == 3);
+    p.current = 0;
+    CHECK(picker_step(&p, -1) == 4);
+
+    /* a layout that cannot be made is stepped past, at the end too, so it still goes round */
+    p.items[4].unavailable = true;
+    p.current = 3;
+    CHECK(picker_step(&p, 1) == 0);
+    p.current = 0;
+    CHECK(picker_step(&p, -1) == 3);
+    CHECK(picker_match_count(&p) == 3);
+    p.items[4].unavailable = false;
+    p.current = 4;
+
+    /* a search proposes, and changes nothing until settled */
+    field_append(&p.filter, "por");
+    picker_filter_changed(&p);
+    CHECK(p.pick == 3 && p.current == 4 && picker_match_count(&p) == 2);
+    CHECK(picker_step(&p, 1) == -1 && p.pick == 4);
+    CHECK(picker_step(&p, 1) == -1 && p.pick == 3);   /* wraps among the matches */
+    CHECK(picker_settle(&p) == 3);
+    CHECK(p.filter.len == 0 && p.pick == 0);
+
+    /* a code matches too, and the search ignores case */
+    field_append(&p.filter, "BR");
+    picker_filter_changed(&p);
+    CHECK(p.pick == 4 && picker_match_count(&p) == 1);
+    CHECK(picker_step(&p, 1) == -1 && p.pick == 4);   /* the only one */
+    picker_cancel(&p);
+    CHECK(p.pick == 0 && picker_settle(&p) == -1);
+
+    /* nothing matches */
+    field_append(&p.filter, "klingon");
+    picker_filter_changed(&p);
+    CHECK(p.pick == 0 && picker_match_count(&p) == 0 && picker_settle(&p) == -1);
+    picker_cancel(&p);
+
+    /* the compositor's own layout (0) has no name, so no search proposes it */
+    CHECK(picker_matches(&p, 0) && picker_matches(&p, 1));   /* without a search, everything is let through */
+    field_append(&p.filter, "a");
+    CHECK(!picker_matches(&p, 0) && picker_matches(&p, 1));
+    picker_cancel(&p);
+
+    /* a picker with only the compositor's layout has nowhere to step */
+    static LayoutPicker alone;
+    memset(&alone, 0, sizeof alone);
+    alone.count = 1;
+    CHECK(picker_step(&alone, 1) == -1 && picker_match_count(&alone) == 0);
+}
+
+static void write_text(const char *path, const char *text) {
+    FILE *f = fopen(path, "w");
+    CHECK(f != NULL);
+    if (!f) return;
+    fputs(text, f);
+    fclose(f);
+}
+
+static void test_layout_text(void) {
+    /* The words are the English ones where nothing translates them, and the same function says them everywhere. */
+    CHECK_STR(layout_text_hint(), "Type to search");
+    CHECK_STR(layout_text_nothing(), "No keyboard matches");
+    char out[64];
+    CHECK_STR(layout_text_name(out, sizeof out, "Portuguese"), "Portuguese keyboard");
+    CHECK(layout_text_name(out, sizeof out, "x") == out);
+    /* A name that does not fit is cut, not overflowed. */
+    char small[12];
+    CHECK(layout_text_name(small, sizeof small, "A very long layout name") == small && strlen(small) == sizeof small - 1);
+    CHECK(layout_text_name(small, 1, "x") == small && small[0] == '\0');
+}
+
+static void test_layout_detect(void) {
+    Layout l;
+
+    CHECK(layout_from_xorg("Section \"InputClass\"\n  Identifier \"system-keyboard\"\n"
+                           "  MatchIsKeyboard \"on\"\n  Option \"XkbLayout\" \"pt,us\"\n"
+                           "  Option \"XkbVariant\" \"nodeadkeys,\"\nEndSection\n", &l));
+    CHECK_STR(l.layout, "pt");
+    CHECK_STR(l.variant, "nodeadkeys");
+    CHECK(!layout_from_xorg("Section \"InputClass\"\n  # Option \"XkbLayout\" \"fr\"\nEndSection\n", &l));
+    CHECK(!layout_from_xorg("", &l));
+
+    CHECK(layout_from_shell_vars("XKBMODEL=\"pc105\"\nXKBLAYOUT=\"de\"\nXKBVARIANT=\"\"\nXKBOPTIONS=\"\"\n", &l));
+    CHECK_STR(l.layout, "de");
+    CHECK(layout_from_shell_vars("XKBLAYOUT=us\nXKBVARIANT=intl\n", &l) && strcmp(l.variant, "intl") == 0);
+    CHECK(!layout_from_shell_vars("KEYMAP=pt-latin9\n", &l));
+
+    Layout known[3] = { {"al", "", "Albanian", false}, {"pt", "", "Portuguese", false}, {"gb", "", "English (UK)", false} };
+    CHECK(layout_from_console_keymap("pt-latin9", known, 3, &l) && strcmp(l.layout, "pt") == 0);
+    CHECK(layout_from_console_keymap("pt", known, 3, &l));
+    CHECK(layout_from_console_keymap("uk", known, 3, &l) && strcmp(l.layout, "gb") == 0);
+    CHECK(layout_from_console_keymap("dvorak", known, 3, &l) && strcmp(l.layout, "us") == 0 &&
+          strcmp(l.variant, "dvorak") == 0);
+    CHECK(!layout_from_console_keymap("klingon-x", known, 3, &l));
+
+    /* hostile text: a value or a line far longer than its buffer is cut, and nothing is read past the end */
+    char huge[2000];
+    memset(huge, 'a', sizeof huge - 1);
+    huge[sizeof huge - 1] = '\0';
+    char text[2600];
+    snprintf(text, sizeof text, "XKBLAYOUT=%s\n", huge);
+    CHECK(layout_from_shell_vars(text, &l) && strlen(l.layout) < sizeof l.layout);
+    snprintf(text, sizeof text, "Option \"XkbLayout\" \"%s\"\n", huge);
+    CHECK(!layout_from_xorg(text, &l));                   /* the line is cut before its closing quote: refused */
+    CHECK(!layout_from_xorg("Option \"XkbLayout\" \"unterminated\n", &l));
+    CHECK(layout_from_shell_vars("XKBLAYOUT=\"unterminated", &l) && strcmp(l.layout, "unterminated") == 0);   /* up to the end of the line */
+    CHECK(!layout_from_console_keymap("", known, 3, &l));
+
+    /* the files, in order: Xorg configuration, then /etc/default/keyboard, then vconsole.conf */
+    char etc[300], path[400];
+    snprintf(etc, sizeof etc, "%s/etc", tmp);
+    CHECK(mkdir(etc, 0700) == 0);
+    snprintf(path, sizeof path, "%s/X11", etc);
+    CHECK(mkdir(path, 0700) == 0);
+    snprintf(path, sizeof path, "%s/X11/xorg.conf.d", etc);
+    CHECK(mkdir(path, 0700) == 0);
+    snprintf(path, sizeof path, "%s/default", etc);
+    CHECK(mkdir(path, 0700) == 0);
+
+    CHECK(!layout_detect(etc, known, 3, &l));
+    CHECK(!layout_detect("/nonexistent/etc", known, 3, &l));
+
+    snprintf(path, sizeof path, "%s/vconsole.conf", etc);
+    write_text(path, "FONT=default8x16\nKEYMAP=pt-latin9\n");
+    CHECK(layout_detect(etc, known, 3, &l) && strcmp(l.layout, "pt") == 0);
+
+    snprintf(path, sizeof path, "%s/default/keyboard", etc);
+    write_text(path, "XKBLAYOUT=\"gb\"\n");
+    CHECK(layout_detect(etc, known, 3, &l) && strcmp(l.layout, "gb") == 0);
+
+    snprintf(path, sizeof path, "%s/X11/xorg.conf.d/00-keyboard.conf", etc);
+    write_text(path, "Section \"InputClass\"\n Option \"XkbLayout\" \"al\"\nEndSection\n");
+    CHECK(layout_detect(etc, known, 3, &l) && strcmp(l.layout, "al") == 0);
+    snprintf(path, sizeof path, "%s/X11/xorg.conf.d/notes.txt", etc);   /* only .conf files are read */
+    write_text(path, "Option \"XkbLayout\" \"fr\"\n");
+    CHECK(layout_detect(etc, known, 3, &l) && strcmp(l.layout, "al") == 0);
+}
+
+/* ---- utf8, language, atomic_file ---- */
+
+static void test_utf8_plain(void) {
+    CHECK(utf8_plain("", 0) && utf8_plain("abc", 3) && utf8_plain("\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80", 9));
+    CHECK(!utf8_plain("a\nb", 3) && !utf8_plain("\t", 1) && !utf8_plain("\x1b", 1) && !utf8_plain("a\x7f", 2));   /* controls */
+    CHECK(!utf8_plain("a\xFF", 2) && !utf8_plain("\xC3", 1) && !utf8_plain("\xE2\x82", 2));                   /* bad, cut short */
+    CHECK(!utf8_plain("\xC0\x80", 2) && !utf8_plain("\xED\xA0\x80", 3) && !utf8_plain("\xF4\x90\x80\x80", 4));
+    CHECK(utf8_plain("ab\xC3\xA9", 2));                                    /* only n bytes are looked at: not past them */
+    CHECK(!utf8_plain("\xE2\x82\xAC", 2));                                /* a sequence cut by n is not whole */
+    CHECK(utf8_plain("a\0b", 3) == false);                                 /* a NUL is a control character */
+}
+
+static void test_utf8(void) {
+    uint32_t cp = 0;
+    CHECK(utf8_decode("a", &cp) == 1 && cp == 'a');
+    CHECK(utf8_decode("\xC3\xA9", &cp) == 2 && cp == 0xE9);
+    CHECK(utf8_decode("\xE2\x82\xAC", &cp) == 3 && cp == 0x20AC);
+    CHECK(utf8_decode("\xF0\x9F\x98\x80", &cp) == 4 && cp == 0x1F600);
+    CHECK(utf8_decode("\xF4\x8F\xBF\xBF", &cp) == 4 && cp == 0x10FFFF);
+    /* What is refused: a stray continuation byte, an overlong form, a surrogate, a code point past
+     * U+10FFFF, and a sequence cut short by the end of the string (never read past it). */
+    CHECK(utf8_decode("\x80", &cp) == 0);
+    CHECK(utf8_decode("\xC0\x80", &cp) == 0);
+    CHECK(utf8_decode("\xE0\x80\x80", &cp) == 0);
+    CHECK(utf8_decode("\xED\xA0\x80", &cp) == 0);
+    CHECK(utf8_decode("\xF4\x90\x80\x80", &cp) == 0);
+    CHECK(utf8_decode("\xF8\x88\x80\x80\x80", &cp) == 0);
+    CHECK(utf8_decode("\xE2\x82", &cp) == 0);
+    CHECK(utf8_decode("\xC3", &cp) == 0);
+}
+
+static void test_language(void) {
+    unsetenv("LANGUAGE");
+    CHECK(pac_set_language(""));                  /* the environment's choice stays */
+    CHECK(getenv("LANGUAGE") == NULL);
+    /* Names that are not usable change nothing. */
+    CHECK(!pac_set_language("pt BR"));
+    CHECK(!pac_set_language("pt;rm"));
+    CHECK(!pac_set_language("../x/y"));
+    char big[PAC_LANGUAGE_MAX + 2];
+    memset(big, 'a', sizeof big - 1);
+    big[sizeof big - 1] = '\0';
+    CHECK(!pac_set_language(big));                /* one byte too long */
+    big[PAC_LANGUAGE_MAX] = '\0';
+    CHECK(pac_set_language(big) || getenv("LANGUAGE"));   /* the longest fits; a locale may be missing */
+    unsetenv("LANGUAGE");
+    CHECK(getenv("LANGUAGE") == NULL);
+    CHECK(pac_set_language("C"));                 /* "C" always exists */
+    CHECK_STR(getenv("LANGUAGE"), "C");
+    unsetenv("LANGUAGE");
+}
+
+static void test_atomic_write(void) {
+    char path[300], other[300], buf[64];
+    snprintf(path, sizeof path, "%s/atomic.txt", tmp);
+    CHECK(atomic_write(path, "one\n", 4));
+    memset(buf, 0, sizeof buf);
+    int fd = open(path, O_RDONLY);
+    CHECK(fd >= 0 && read(fd, buf, sizeof buf) == 4);
+    close(fd);
+    CHECK_STR(buf, "one\n");
+    struct stat st;
+    CHECK(stat(path, &st) == 0 && (st.st_mode & 0777) == 0600);
+
+    /* Written again, it replaces the file whole; nothing is left behind in the folder. */
+    CHECK(atomic_write(path, "2", 1));
+    memset(buf, 0, sizeof buf);
+    fd = open(path, O_RDONLY);
+    CHECK(fd >= 0 && read(fd, buf, sizeof buf) == 1);
+    close(fd);
+    CHECK_STR(buf, "2");
+    CHECK(atomic_write(path, "", 0));             /* empty data is a valid file */
+    CHECK(stat(path, &st) == 0 && st.st_size == 0);
+    char left[300];
+    snprintf(left, sizeof left, "%s/.atomic.txt.%ld", tmp, (long)getpid());
+    CHECK(access(left, F_OK) != 0);
+
+    /* A symbolic link left where the temporary file goes is replaced, not followed. */
+    snprintf(other, sizeof other, "%s/victim.txt", tmp);
+    CHECK(atomic_write(other, "safe", 4));
+    CHECK(symlink(other, left) == 0);
+    CHECK(atomic_write(path, "new", 3));
+    memset(buf, 0, sizeof buf);
+    fd = open(other, O_RDONLY);
+    CHECK(fd >= 0 && read(fd, buf, sizeof buf) == 4);
+    close(fd);
+    CHECK_STR(buf, "safe");
+
+    /* A link at path itself is replaced by the file, and its target is untouched. */
+    char link[300];
+    snprintf(link, sizeof link, "%s/link.txt", tmp);
+    CHECK(symlink(other, link) == 0);
+    CHECK(atomic_write(link, "via", 3));
+    memset(buf, 0, sizeof buf);
+    fd = open(other, O_RDONLY);
+    CHECK(fd >= 0 && read(fd, buf, sizeof buf) == 4);
+    close(fd);
+    CHECK_STR(buf, "safe");
+    CHECK(lstat(link, &st) == 0 && S_ISREG(st.st_mode));
+
+    /* Failures leave no temporary file and report why. */
+    char missing[300];
+    snprintf(missing, sizeof missing, "%s/no/such/folder/f", tmp);
+    CHECK(!atomic_write(missing, "x", 1) && errno == ENOENT);
+    CHECK(!atomic_write("", "x", 1));
+    CHECK(!atomic_write("dir/", "x", 1));         /* no file name */
+    char longpath[PAC_FILE_PATH_MAX + 8];
+    memset(longpath, 'a', sizeof longpath - 1);
+    longpath[0] = '/';
+    longpath[sizeof longpath - 1] = '\0';
+    CHECK(!atomic_write(longpath, "x", 1));
+    /* A path with no slash goes to the current folder. */
+    int here = open(".", O_RDONLY | O_DIRECTORY);
+    CHECK(here >= 0 && chdir(tmp) == 0);
+    CHECK(atomic_write("here.txt", "h", 1));
+    CHECK(access("here.txt", F_OK) == 0);
+    if (here >= 0 && fchdir(here) != 0) CHECK(0);
+    if (here >= 0) close(here);
+}
+
 /* ---- random input: what matters is that the sanitizers stay quiet ---- */
 
 static unsigned rng = 12345;
@@ -820,6 +1417,25 @@ static void test_length(void) {
         fprintf(stderr, "skipped: no de_DE.UTF-8 locale to test LC_NUMERIC independence\n");
     }
     setlocale(LC_NUMERIC, saved);
+}
+
+static void test_text_scale(void) {
+    double scale = 7;
+    const char *good[] = { "0.5", "1", "1.0", "1.5", "2.5", "0.50", "02" };
+    const double want[] = { 0.5, 1, 1, 1.5, 2.5, 0.5, 2 };
+    for (size_t i = 0; i < sizeof good / sizeof *good; i++) {
+        scale = 7;
+        CHECK(pac_text_scale_parse(good[i], &scale) && scale == want[i]);
+    }
+    /* Everything else is refused, and the value is left alone: a number out of range or NaN (which
+     * passes `x < min || x > max`), text after the number, a sign, an exponent, a comma, a space. */
+    const char *bad[] = { "", "nan", "NaN", "inf", "-inf", "-1", "0", "0.49", "2.51", "9", "1.5x", "1e1", "1,5",
+                          " 1.5", "1.5 ", "+1.5", ".", "abc", "0x1" };
+    for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) {
+        scale = 7;
+        CHECK(!pac_text_scale_parse(bad[i], &scale) && scale == 7);
+    }
+    CHECK(!pac_text_scale_parse(NULL, &scale));
 }
 
 static void test_palette(void) {
@@ -965,6 +1581,7 @@ int main(void) {
     test_setting();
     test_field();
     test_field_retype();
+    test_field_edit_key();
     test_fontfind();
     test_font_dirs();
     test_config_guards();
@@ -972,9 +1589,21 @@ int main(void) {
     test_field_guards();
     test_fontfind_guards();
     test_palette();
+    test_text_scale();
     test_length();
     test_speech();
     test_speech_announce();
+    test_field_preedit();
+    test_textinput();
+    test_layout_spec();
+    test_layout_list();
+    test_picker();
+    test_layout_text();
+    test_layout_detect();
+    test_utf8();
+    test_utf8_plain();
+    test_language();
+    test_atomic_write();
     test_random_input();
 
     remove_tree(tmp);

@@ -36,8 +36,13 @@ README describes which of its files include wlroots, so the change stays in thos
 | Tested | wayland 1.26.0, wayland-protocols 1.49 |
 | Core library | https://wayland.freedesktop.org/docs/html/ |
 | Protocol browser (every protocol, with its status and which compositors support it) | https://wayland.app/protocols/ |
+| `text-input-v3` (input methods; `src/textinput_wayland.c`) | https://wayland.app/protocols/text-input-unstable-v3 and `text-input-unstable-v3.xml` in `wayland-protocols` |
 | Standard protocols (`xdg-shell`, `viewporter`, `fractional-scale`, `ext-session-lock`, ...) | https://gitlab.freedesktop.org/wayland/wayland-protocols |
 | wlroots protocols (`wlr-layer-shell`) | https://gitlab.freedesktop.org/wlroots/wlr-protocols |
+
+`text-input-v3`: the installed XML is interface version 2, the tools bind version 1 (the one every compositor with it has). The
+client only enables, disables, sets the content type and the cursor rectangle and commits, and takes `preedit_string`,
+`commit_string`, `delete_surrounding_text` and `done` (applied in that order, on `done`).
 
 A tool keeps the XML of the protocols it uses in its `protocol/` folder or reads it from
 `wayland-protocols`; `wayland-scanner` makes the code. Check on wayland.app that a protocol is
@@ -47,11 +52,12 @@ stable (or staging) and which compositors have it before depending on it.
 
 | Library | Used for | Tested | Documentation |
 | --- | --- | --- | --- |
-| Cairo | drawing | 1.18.6 | https://www.cairographics.org/manual/ |
+| Cairo | drawing; `textdraw.c` uses `cairo_ft_font_face_create_for_ft_face` and `cairo_font_face_set_user_data` (FreeType's `FT_Done_Face` as the destroy function: the pattern the Cairo manual gives for `cairo-ft.h`), `cairo_get_font_face`, `cairo_show_glyphs` and `cairo_glyph_path`. Cairo's cache of scaled fonts holds the faces, so `cairo_debug_reset_static_data` must not be used where they are in use | 1.18.6 | https://www.cairographics.org/manual/ (`cairo-ft.h`) |
 | FreeType | font files | 2.15.0 | https://freetype.org/freetype2/docs/reference/index.html |
 | HarfBuzz | shaping text (translated builds): `textlayout.c` uses `hb_ft_face_create_referenced`, `hb_buffer_*`, `hb_shape` and `hb_unicode_general_category` / `hb_unicode_script` | 14.6.0 | https://harfbuzz.github.io/ (`/usr/include/harfbuzz/hb-ft.h`) |
 | FriBidi | right-to-left text (translated builds): `textlayout.c` uses `fribidi_get_bidi_types`, `fribidi_get_bracket_types`, `fribidi_get_par_direction`, `fribidi_get_par_embedding_levels_ex` | 1.0.17 | https://github.com/fribidi/fribidi (`/usr/include/fribidi/fribidi-bidi.h`) |
 | xkbcommon | keyboard layouts | not checked | https://xkbcommon.org/doc/current/ |
+| xkeyboard-config | `layout.c` reads its rules list (`/usr/share/X11/xkb/rules/evdev.lst`, or under `xkeyboard-config-2`) and its translations (gettext domains `xkeyboard-config-2` and `xkeyboard-config`) | 2.48 | https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config |
 | PAM (libpam) | paclock's login | 1.7.3 | `/usr/include/security/pam_appl.h`, `man pam_start`, https://linux-pam.org/ |
 | libinput | pacland's input | not checked | https://wayland.freedesktop.org/libinput/doc/latest/ |
 | sd-bus (libsystemd) | notifications over D-Bus | systemd-libs 262.1 | https://www.freedesktop.org/software/systemd/man/latest/sd-bus.html |

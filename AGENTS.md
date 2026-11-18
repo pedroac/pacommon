@@ -9,6 +9,11 @@ are in [PRINCIPLES.md](PRINCIPLES.md) and [docs/decisions.md](docs/decisions.md)
 pacreact, ...), and their common principles. It is not installed: each tool compiles the files it
 uses from `../pacommon`, statically, into its own binary. Linux only, C, GCC or Clang.
 
+It is the **common source of truth**, not code every tool must carry: where two tools do the same
+thing, the rule is written once here so that they behave the same, and a tool that does not need a
+file does not compile it (and a feature a build can turn off has a switch, as `NO_I18N` is for text
+layout).
+
 ```
 make              # compile with the hardening flags and warnings the tools use
 make test         # unit tests, no display needed
@@ -87,6 +92,11 @@ src/              the source, all of it in this folder:
   palette.[ch]      the shared colors (normal, high)    compiler.h      GCC/Clang hints
   speech.[ch]       speaks messages (speech-dispatcher)  length.[ch]     sizes with a unit, mm to px
   textlayout.[ch]   text right in every script (HarfBuzz, FriBidi; plain with NO_I18N)
+  utf8.[ch]         one UTF-8 character                  language.[ch]   the language of the texts
+  atomic_file.[ch]  a file written whole or not at all
+  textdraw.[ch]     text drawn right in every script (Cairo, over textlayout)
+  layout.[ch]       keyboard layouts and the picker      layout_detect.[ch]  the system's own layout
+  layout_text.[ch]  the picker's words, shown and said
   tunables.h        sizes, limits, defaults
 pac.mk            install rules for the tools' Makefiles   pac.conf     the shared settings, example
 tests/test.c      unit tests                            tests/distros.sh  tests on other distributions

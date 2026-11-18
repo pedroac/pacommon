@@ -69,6 +69,7 @@ tool.
 | `language` | a locale such as `pt_BR` | from `LANG` | Language of messages |
 | `icons` | `auto`, `theme`, `0` | the tool's own | The icon set |
 | `theme` | a name | the tool's own | The color scheme, for tools that have more than one |
+| `reduce_motion` | `yes`, `no` | `no` | No fades or other motion; wins over a tool's own motion settings |
 | `speech` | `yes`, `no` | `yes` (when built with speech) | Speak focus, changes and messages |
 | `resources` | `normal`, `low`, `minimal` | `normal` | How much memory and work the tool may use: fewer extras, smaller images |
 | `privacy` | `normal`, `medium`, `high`, `paranoid` | `normal` | How much the tool shows, or leaks, about the person and the session |
@@ -86,7 +87,7 @@ ones before it). `pacommon` defines the names and the rules
 below; **each tool says, in its README and example `<tool>.conf`, what each level does**, and a
 higher level never does less than a lower one. A level is a default: the tool's own settings still decide what the person set.
 
-1. **The accessibility settings are not levels' to change.** `contrast`, `speech`, `text_scale`,
+1. **The accessibility settings are not levels' to change.** `contrast`, `speech`, `reduce_motion`, `text_scale`,
    `text_size_min` and `text_size_max` are never turned off or overridden by `resources` or
    `privacy`. What is spoken may say less (`privacy` may leave out the user name), but a result the
    person needs (a refused password, a failed action) is never left unspoken.

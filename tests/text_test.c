@@ -306,6 +306,90 @@ static void test_random(void) {
     }
 }
 
+/* ---- the caret ---- */
+
+static double width_of(const PacTextOptions *o, const char *text) {
+    return pac_text_layout(o, text, &line) ? line.width : 0;
+}
+
+static void test_caret_latin(void) {
+    PacTextOptions o = options(PAC_TEXT_AUTO, "en");
+    double x = 7;
+    int d = pac_text_caret(&o, "abc", 0, &x);
+    CHECK(d == 1 && x == 0);                                            /* the start */
+    double full = width_of(&o, "abc");
+    d = pac_text_caret(&o, "abc", 3, &x);
+    CHECK(d == 1 && fabs(x - full) < 1e-9);                             /* the end is the width */
+    d = pac_text_caret(&o, "abc", 99, &x);
+    CHECK(d == 1 && fabs(x - full) < 1e-9);                             /* past the end: the end */
+    d = pac_text_caret(&o, "abc", 1, &x);
+    CHECK(d == 1 && x > 0 && x < full && fabs(x - width_of(&o, "a")) < 0.05);   /* between letters (kerning aside) */
+    CHECK(pac_text_caret(&o, "abc", 2, &x) == 1 && x > width_of(&o, "a"));      /* and growing as the offset does */
+    CHECK(pac_text_caret(&o, "", 0, &x) == 0 && x == 0);                /* nothing to put it next to */
+    CHECK(pac_text_caret(&o, NULL, 0, &x) == 0 && x == 0);
+    /* In the middle of a letter that is two bytes: after it, not inside it. */
+    CHECK(pac_text_caret(&o, "\xC3\xA9" "b", 1, &x) == 1 && x > 0 && x <= width_of(&o, "\xC3\xA9") + 1e-9);
+}
+
+#ifndef NO_I18N
+static void test_caret_directions(void) {
+    if (!F.hebrew) { skipped++; fprintf(stderr, "skipped: no Noto Sans Hebrew (caret)\n"); return; }
+    const char *shalom = "\xD7\xA9\xD7\x9C\xD7\x95\xD7\x9D";            /* four letters, eight bytes */
+    PacTextOptions he = options(PAC_TEXT_AUTO, "he");
+    double x, full = width_of(&he, shalom);
+
+    /* A right-to-left line: the first letter is at the right, so the start of the text is at the right end and
+     * its end at the left end; the text goes to the left from there. */
+    int d = pac_text_caret(&he, shalom, 0, &x);
+    CHECK(d == -1 && fabs(x - full) < 1e-9);
+    d = pac_text_caret(&he, shalom, 8, &x);
+    CHECK(d == -1 && fabs(x) < 1e-9);
+    d = pac_text_caret(&he, shalom, 2, &x);                             /* after the first letter: its left side */
+    CHECK(d == -1 && x > 0 && x < full && fabs(x - (full - width_of(&he, "\xD7\xA9"))) < 0.05);
+    double before = x;
+    CHECK(pac_text_caret(&he, shalom, 4, &x) == -1 && x < before);      /* going left as the offset grows */
+
+    /* A left-to-right paragraph that ends in Hebrew: the end of the text is not at the right end, but where the
+     * Hebrew run begins, at its left, with the text going on to the left. */
+    PacTextOptions ltr = options(PAC_TEXT_LTR, NULL);
+    char mixed[64];
+    snprintf(mixed, sizeof mixed, "abc %s", shalom);
+    double abc = width_of(&ltr, "abc ");
+    d = pac_text_caret(&ltr, mixed, strlen(mixed), &x);
+    CHECK(d == -1 && fabs(x - abc) < 0.05);
+    d = pac_text_caret(&ltr, mixed, 4, &x);                             /* after "abc ": the Latin run's end */
+    CHECK(d == 1 && fabs(x - abc) < 0.05);
+    d = pac_text_caret(&ltr, mixed, 0, &x);
+    CHECK(d == 1 && x == 0);
+
+    /* A right-to-left paragraph that ends in Latin: the end of the text is at the right end of the Latin run, which
+     * is at the left of the line. */
+    PacTextOptions rtl = options(PAC_TEXT_RTL, NULL);
+    snprintf(mixed, sizeof mixed, "%s abc", shalom);
+    double latin = width_of(&rtl, "abc");
+    d = pac_text_caret(&rtl, mixed, strlen(mixed), &x);
+    CHECK(d == 1 && fabs(x - latin) < 0.05);
+    d = pac_text_caret(&rtl, mixed, 0, &x);                             /* and the start is at the far right */
+    CHECK(d == -1 && fabs(x - width_of(&rtl, mixed)) < 1e-9);
+
+    if (F.arabic) {
+        const char *marhaba = "\xD9\x85\xD8\xB1\xD8\xAD\xD8\xA8\xD8\xA7";   /* joined letters: five characters */
+        PacTextOptions ar = options(PAC_TEXT_AUTO, "ar");
+        double w = width_of(&ar, marhaba);
+        CHECK(pac_text_caret(&ar, marhaba, 0, &x) == -1 && fabs(x - w) < 1e-9);
+        CHECK(pac_text_caret(&ar, marhaba, 10, &x) == -1 && fabs(x) < 1e-9);
+        double last = w;
+        bool decreasing = true;
+        for (size_t at = 2; at <= 10; at += 2) {                        /* each letter moves it to the left */
+            pac_text_caret(&ar, marhaba, at, &x);
+            decreasing = decreasing && x < last + 1e-9;
+            last = x;
+        }
+        CHECK(decreasing);
+    }
+}
+#endif
+
 int main(void) {
     if (FT_Init_FreeType(&ft) != 0) { fprintf(stderr, "FreeType did not start\n"); return 2; }
 
@@ -334,7 +418,9 @@ int main(void) {
         test_latin();
         test_fit();
         test_random();
+        test_caret_latin();
 #ifndef NO_I18N
+        test_caret_directions();
         test_shaping();
         test_order();
         test_scripts();

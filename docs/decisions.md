@@ -438,3 +438,186 @@ Open, found against the new principles and not changed:
 - **Decided:** `pac_config_load_shared` is split: `pac_config_load_shared_file(prog, path, ...)` reads one `pac.conf` with the shared-key checks, and `pac_config_load_shared_locations(prog, count, ...)` reads the first `count` of the usual places; `pac_config_load_shared` is all of them. `PAC_CONFIG_LOCATIONS_NO_CWD` (2) leaves out the current folder.
 - **Why:** pacgreet runs as the greeter user before anybody has logged in and runs commands from its own settings, so it must not read files from its working folder. Its `pac.conf` was the one place left that did. The other tools' behavior is unchanged.
 - **When:** 2026-11-17
+
+## 2026-11-18: `utf8`, `language` and `atomic_file` move here from the tools
+
+- **Decided:** three small files that the tools had each written for themselves are added here:
+  `utf8.[ch]` (`utf8_decode`, byte for byte the file pacpeek and pacreact both have),
+  `language.[ch]` (`pac_set_language`, the `i18n_set_language` of pacgreet, paclock and pacpeek,
+  with its limit now `PAC_LANGUAGE_MAX`), and `atomic_file.[ch]` (`atomic_write`, the temporary
+  file, `fsync` and `rename` that pacgreet's `store_save` and pacmenu's `usage_save` each write;
+  pacreact has similar code that was not read for this).
+- **Why:** the same code in several tools drifts: the copies of `i18n_set_language` already differ
+  in a comment, and the writers differ in what they check (pacgreet's `store_save` does not call
+  `fsync`, pacmenu's does). One tested copy is smaller in every binary and easier to review.
+- **Switched over (2026-11-18):** `utf8`: pacpeek, pacreact. `language`: pacgreet and paclock (through
+  `i18n.h`, which names `i18n_set_language` as `pac_set_language`), pacpeek, pacreact.
+  `atomic_write`: pacgreet, pacmenu. Not switched: pacreact's `state.c`, `alerts.c` and `timer.c`,
+  which write a file their own way and were not read for this.
+- **Not moved:** `i18n.[ch]` stays in each tool, because it holds the tool's gettext domain and its
+  `_()` (`PACOMMON_I18N` picks it up); only the language function, which needs neither, is shared.
+  `atomic_write` does not make folders and takes its data from memory, to keep it to one job; a
+  tool that has more to say than fits in memory, or that needs a folder, does that part itself.
+- **Names:** `pac_set_language` and `atomic_write` do not repeat a tool's `i18n_set_language` or
+  `pf_write`, so a tool can switch over one call at a time.
+- **When:** 2026-11-18
+
+## 2026-11-18: pacommon is the common source of truth, and one set of editing keys
+
+- **Decided:** `pacommon` is where a rule that two tools share is written once, so that the tools
+  behave the same; it is not code that every tool must carry. A tool that does not need a file does
+  not compile it, and a feature a build can turn off has a switch (`NO_I18N` for text layout). This
+  replaces the reading of the rule in `docs/development.md` as "nothing that needs a library".
+  What stays in a tool is what only that tool does. No Wayland code has been written here; whether
+  to is answered in the 2026-11-18 entry on keyboard layouts (it is not ruled out), and the
+  measurement behind it is in the next point.
+- **Measured:** the Wayland and xkb code of `pacgreet`, `paclock`, `pacpeek`, `pacmenu`, `pacreact`
+  and `pacbar` (comparing function bodies): about 520 lines are identical or near-identical, all of
+  them between `pacgreet`, `paclock` and `pacpeek`; the other three share none. The comparison
+  missed the input-field code, which is inline in larger functions, so it is a lower bound. It is
+  a rough match on normalized lines, not a proof.
+- **Also decided:** `field_edit_key` (`field.c`) is the one set of editing keys. It replaces the
+  copies in `pacgreet` (user, password, layout filter), `paclock` (password, layout filter) and
+  `pacmenu` (search), which had drifted: `pacmenu`'s search did not clear on Ctrl+U, and `paclock`'s
+  layout filter cleared on neither Ctrl+Backspace nor Ctrl+U.
+- **What changed for a person:** Ctrl+U clears `pacmenu`'s search; Ctrl+Backspace and Ctrl+U clear
+  `paclock`'s layout filter. Backspace, Ctrl+Backspace or Ctrl+U on an *empty* field no longer
+  counts as an edit: in `pacgreet` and `paclock` it no longer clears an error message, and in
+  `pacmenu` it no longer resets the selection (it would have). Text a tool limits to less than
+  `FIELD_MAX` (`pacmenu`'s `QUERY_MAX`) is passed as `max`.
+- **Why `held` and not xkbcommon's types:** the function takes the keysym as a number and the held
+  modifiers as `FIELD_CTRL`, `FIELD_ALT` and `FIELD_LOGO`, so `field.c` stays libc only.
+- **When:** 2026-11-18
+
+## 2026-11-18: keyboard layouts are here, and why the pac tools are what they are
+
+- **Decided:** the keyboard layout code that pacgreet and paclock each had is `layout.[ch]` and
+  `layout_detect.[ch]` here: the list, `layout_parse_spec`, `layouts_load`, `LayoutPicker` and its
+  functions, `pac_layout_name`, and (for pacgreet) detecting the system's layout. `MAX_LAYOUTS` and
+  the list limit (now `LAYOUT_LIST_MAX`) moved to `tunables.h`.
+- **Why:** paclock's `layout.c` was a trimmed copy of pacgreet's: 11 of its 12 functions were
+  identical, and the twelfth, `layout_parse_spec`, had drifted. paclock's handles more (it reads
+  `us (intl)` and keeps the name properly), pacgreet's does not. pacommon has paclock's version.
+- **What changed for a person:** pacgreet now reads a spec with a space before the variant
+  (`us (intl)`), as paclock already did, in `layouts` and `default_layout`.
+- **The session selector stays in pacgreet:** only it has sessions, and what it shares with the
+  layout row is drawing (`draw_choice`, in each tool's `render.c`), which needs Cairo and is not here.
+- **Tests:** the picker, list, spec and detection tests moved here from the two tools, with more
+  (lists and specs that do not fit, a picker with nothing to step to, files that are not `.conf`).
+- **What the tools are (the author's words, as reasons for the rules here):** the pac tools are
+  not the apps a person uses a computer for (a browser, a drawing program); they are the tools
+  around those apps: logging in, a window manager, a way to find and start an app, a bar,
+  notifications. Some are always visible, are the start and the end of a session, or are always
+  watching. They would not be useful on Windows or macOS, where people are not expected to pick
+  such tools. That is why they are tied to Wayland (X11 being obsolete, and most apps on Linux
+  using Wayland), and why they have to be lean and fast, and **consistent with each other**, at
+  least those of one desktop. A regular app can use something else and be portable; these need not.
+- **So:** pacommon is where what the desktop tools do the same way is written once. Wayland-specific
+  code here is not ruled out (the tools depend on Wayland anyway); it has not been written because
+  the measured overlap was small (previous entry), not because of a rule.
+- **When:** 2026-11-18
+
+## 2026-11-18: accessibility here helps other tools, with care, and is always optional
+
+- **Decided (the author's direction):** pacommon should help the tools be inclusive, which is why it
+  has accessibility code (`speech`, `palette`, `field`, the layout picker). It is not to be done
+  blindly: attention to detail, so that what a person is told and how it is said is convenient and
+  easy to understand, the same in every tool. And it must be easy to turn off: in the build, with a
+  compiler directive (`SPEECH=none`, to save size), and in the configuration (`speech = no`), so
+  that each person chooses, since for most people speech is an annoyance.
+- **Already so:** principles 25 and 34 to 36 say it. `SPEECH=none` links no speech library, and
+  `speech = no` loads no backend (`docs/accessibility.md`, checklist 7 and 8).
+- **When:** 2026-11-18
+
+## 2026-11-18: an accessibility audit, and what is left open
+
+- **Read, not run:** nothing was used with a screen reader, a color-blindness simulation or a real display; the findings are from the code, the docs and what could be built and measured. Checked by running: `SPEECH=none` links no libspeechd in pacmenu, pacgreet and paclock; pacreact's colors against pacommon's contrast rules.
+- **Fixed:** `text_scale` is read by `pac_text_scale_parse` in pacmenu, pacpeek and pacreact (pacpeek accepted `nan`; `strtod` is locale dependent); `test_text_scale` here covers the parser; pacreact's colors have a test. pacland already refuses non-finite values and keeps its own table-driven parser.
+- **Done:** pacmenu is translated (its own entry), except for drawing scripts that need shaping.
+- **Open, for the author:** (1) speech is on by default in pacmenu, pacgreet and paclock, and the default build links libspeechd, while for most people speech is an annoyance: keep it, turn it off, or turn it on only when a screen reader runs; (2) how pacmenu gets `textlayout` (new dependencies) and whether the script font code that pacgreet and paclock each have (about 250 lines; pacreact and pacpeek have their own) becomes a shared file first; (3) more catalogs for pacmenu; (4) the spoken text of the layout picker is written twice (pacgreet's and paclock's `announce.c`); (5) **pacbar** has no keyboard path, no speech and no `text_scale` (its sizes follow `height`), and its contrast depends on the desktop in normal mode: the author postponed the decision.
+- **When:** 2026-11-18
+
+## 2026-11-18: text drawing is here (`textdraw`), and pacgreet, paclock and pacmenu use it
+
+- **Decided:** the font and glyph drawing that pacgreet and paclock each had is `textdraw.[ch]`: loading a font file, the font of each script (the table of Noto fonts, the Chinese, Japanese and Korean faces by language), finding the font of a letter, drawing what `textlayout` shaped, measuring, fitting a line with an ellipsis, and cutting one to wrap it. Measured before moving it: the whole block (about 170 lines of code, plus `fit`, `text_width` and `show_text`) was identical in the two tools, line for line. They use it now, and pacmenu is the first new user (its own entry).
+- **What differs from what the tools had:** the module no longer keeps "the font being measured" as a variable of its own: the font is the one set on the Cairo context. `pac_font_finish` takes the faces the tool made and ends everything in the safe order; `pac_font_init` may be called again. Nothing else changed in how a line is laid out or drawn.
+- **Checked:** the pacgreet and paclock binaries are byte-for-byte the same size as before (default and `I18N=0`). Their own tests do not draw (`render.c` is not in them), so the shared code has tests here (`tests/textdraw_test.c`, 38 checks in both flavours, under the sanitizers): the pixels of what is drawn, Arabic taken from its own font, `pac_font_lazy` remembering a miss, fitting and cutting, a Cairo font. Neither tool was run on a compositor after the change.
+- **Not moved:** pacreact's `text.c` and pacpeek's `render.c` do the same job in their own way (pacreact with its own `pick`); they were not read for this.
+- **Found while testing:** Cairo's scaled font cache holds the faces, so `cairo_debug_reset_static_data` after `FT_Done_FreeType` crashes in `FT_Done_Face`, and before it asserts in Cairo. Tools exit instead; the tests do not reset the cache and suppress only the fontconfig pattern that a toy font face leaves (LeakSanitizer). Written in `docs/apis.md` and `using.md`.
+- **When:** 2026-11-18
+
+## 2026-11-18: the layout picker's words are written once (`layout_text`)
+
+- **Decided:** "Type to search", "No keyboard matches" and the "%s keyboard" label are `layout_text.[ch]`. pacgreet and paclock had each written them in `announce.c` (spoken), `render.c` (drawn) and `main.c` (the label).
+- **Why:** they had drifted: paclock said "Type to change it" when the focus entered the picker, while its own screen showed "Type to search". Everything spoken is also shown (principle 36), so the wording the screen already had is the one kept, and typing does search: it never changes the layout until it is settled. A person using a screen reader heard different guidance at the login screen and at the lock screen.
+- **What is not shared:** when each tool says it. pacgreet says the hint on every visit to the picker with an empty search; paclock says it when the focus enters it. That is each tool's flow, not wording.
+- **Where the file is:** apart from `layout.c`, which `LAYOUTS=0` leaves out of paclock, because the words are drawn and said either way.
+- **When:** 2026-11-18
+
+## 2026-11-18: speech stays on by default
+
+- **Decided (the author):** `speech` defaults to `yes` in pacmenu, pacgreet, paclock and pacreact, and the default build is `SPEECH=speechd`. Nothing changed in the code: that is how they were.
+- **Why:** without speech-dispatcher speech cannot work, so it is as if it were off, apart from a few resources; and if it were off by default, a blind person could be stuck, needing someone to turn it on, most of all at the login screen, where there is nothing to configure first. Most people may be surprised that a tool speaks, but they can turn it off (`speech = no`, once in `pac.conf` for every tool, or `SPEECH=none` when building). The surprise is the smaller cost.
+- **Known cost:** on a machine without speech-dispatcher each start says once that it cannot reach the speech server (on stderr, translated).
+- **An idea, not built:** at the start of a session, ask the person whether they want speech. It would need somewhere to remember the answer for the greeter (which runs before any settings of the person's) and a way to be reached without seeing the screen; not designed.
+- **Closes:** the first open point of the 2026-11-18 accessibility audit above.
+- **When:** 2026-11-18
+
+## 2026-11-18: pacmenu has all sixteen catalogs
+
+- **Done:** the third open point of the accessibility audit: pacmenu has the same sixteen catalogs as pacgreet and paclock (details in `pacmenu/docs/decisions.md`). Machine-written, not reviewed by a native speaker; looked at on screen in every language, tried by no person.
+- **Found on the way:** in 15 of the 16 languages both pacgreet's and paclock's catalogs leave pacommon's shared config messages (`not a regular file`, `too large`, ...) untranslated; only Portuguese has them. They were translated in pacmenu's catalogs, not in the siblings'.
+- **Still open:** (the layout of pacmenu is mirrored for right-to-left languages since the next entry), and the pacbar keyboard decision, postponed.
+- **When:** 2026-11-18
+
+## 2026-11-18: pacmenu mirrors its layout for right-to-left languages
+
+- **Done:** the "layout is not mirrored" point left open above: pacmenu turns the whole menu over for a right-to-left language (`pacmenu/docs/decisions.md`, last entry). `textdraw` still draws each line in order and left aligned in its box; the mirroring is the tool's, using `pac_text_language_rtl`.
+- **Not shared:** it was written in pacmenu only. pacgreet and paclock are centered cards (a field, a line), so there is little to turn over, but their right-to-left behavior (where an arrow button sits, where a typed line starts) has not been looked at here.
+- **When:** 2026-11-18
+
+## 2026-11-18: the caret is placed by the layout (`pac_text_caret`), and the three tools use it
+
+- **Decided:** where a caret goes is worked out from the shaped line, not from the first letter of the text: `PacTextGlyph` now says which character it starts (`cluster`), the direction of its run (`level`) and the space it takes (`pen`, `advance`), and `pac_text_caret` puts the caret at the end of the character before it, which is the right side of a left-to-right run and the left side of a right-to-left one (the start of the text: the near side of the first). `textdraw` has `pac_font_caret` (pixels) and `pac_font_caret_x` (the bar of a field that is typed into). pacmenu's search box, pacgreet's username, password and layout search, and paclock's password and layout search use it.
+- **Why:** the first version in pacmenu looked at the first letter with a direction (`starts_rtl`), which is right for text of one direction and wrong for a line that has both: "web" followed by Arabic in a left-to-right menu ends where the Arabic run begins, in the middle of what is drawn, which no first-letter rule can say. That function is gone.
+- **One caret:** a person who types sees one caret; at a place where two runs meet it is the one of the character before it, as in most editors. A second caret for the other direction, and moving the caret by keys through mixed text, are not done (nothing here moves a caret: fields are edited at their end).
+- **Checked:** `tests/text_test.c` (Latin; Hebrew, Arabic; a left-to-right line that ends in Hebrew and a right-to-left line that ends in Latin, both against the widths of their runs) and `tests/textdraw_test.c`, in both flavours and under the sanitizers; swapping the two sides fails 16 checks. In the plain flavour (`NO_I18N`) everything goes left to right and the caret is at the end of the last letter.
+- **Not checked:** the dots of a password do not say which way it was typed, so their caret follows the language of the menu (the left end in a right-to-left one); nothing about a password is passed to the drawing, on purpose.
+- **When:** 2026-11-18
+
+## 2026-11-18: keyboard completeness is for the desktop, and pacbar is an exception to principle 35
+
+- **Decided (the author):** pacbar does not take keyboard focus; everything it does can be done with the keyboard elsewhere in the desktop (the compositor's keys for workspaces and windows, the menu, the volume keys, a tray app that is planned). The reasoning, the table of each action and its key, and what is open are in `pacbar/docs/decisions.md`.
+- **For the principles:** principle 35 is written for each tool; this is an exception to it, allowed by principle 54 and written down. It may be worth saying in the principle itself that a tool that is pointer-first by design must give the keyboard path of each action in its `decisions.md`; the text of the principles is the author's, and was not changed.
+- **Open:** the tray (no keyboard path until its app exists), and the launcher binding the author describes (releasing super), which is not a default of pacland.
+- **Closes:** the pacbar keyboard decision that was postponed.
+- **When:** 2026-11-18
+
+## 2026-11-18: the accessibility gaps are registered; the speech engine is a requirement
+
+- **Done:** the gaps found in the audit are in a table in `docs/accessibility.md` ("Known gaps"), with their status. Decided by the author: item 8 (the tray, clock and network and volume apps) is **delayed**; **pacbar does not need speech**.
+- **The speech engine:** the docs now say that speech needs speech-dispatcher *and* a speech engine with a voice (espeak-ng, Piper, Festival...) and a sound server, in `docs/platform.md`, `docs/accessibility.md`, `pac.conf` and the READMEs of the tools that speak (pacmenu, pacgreet, paclock, pacreact). Checked on the author's machine: speech-dispatcher 0.12.1 lists espeak-ng as an optional dependency (installed), and its default module there is Piper. Not done: a check at run time that an engine exists (the server accepts text either way), and a sound cue when speech cannot be reached, which would be a new default for people without speech-dispatcher.
+- **When:** 2026-11-18
+
+## 2026-11-18: input methods (text-input-v3), client side
+
+- **Done:** `pacommon` has `textinput.[ch]` (the events of an input method, applied in the order the protocol says, with what comes from outside checked: UTF-8, no control characters, a size), `textinput_wayland.[ch]` (the protocol; built only when `wayland-protocols` has the XML), `Field` can hold a preedit, and `textdraw` has `pac_font_preedit` and `pac_font_span` (underline, cursor). pacmenu (search), pacgreet (username, layout search) and paclock (layout search) use them. They are opt-in per file like the rest.
+- **Decided (by me, as the default of the work; say if not):** the surrounding text is **never sent** (the username or search may be private, and the tools do not need it), and **no input method is enabled on a password field** (the field is not told about, and `purpose` is `normal` or `name` only). Version 1 of the protocol is bound.
+- **Not done / open:** pacland has no `text-input` and `input-method` relay, so on it nothing happens: the fields work as before. paclock places the input method's window by the first card when there are several screens. Not tried with a real input method (fcitx5, ibus) or on a lock surface (`ext-session-lock`): only tests of the logic and of the drawing. The question that remains is whether a compositor sends text input to a lock surface.
+- **Tests:** hostile input to the events, the order, resets, sizes (pacommon); the drawing and the cursor rectangle (pacmenu, pacgreet, paclock); `utf8_plain` shared by `Field` and `textinput`. Sanitizers clean.
+- **When:** 2026-11-18
+
+## 2026-11-18: `reduce_motion`, a shared setting
+
+- **Done:** `reduce_motion = yes|no` (default `no`) is a shared key of `pac.conf`, checked in `config_file.c` like `speech`. pacreact reads it and turns its fade off, whatever `fade_ms` says (`fade_ms = 0` was the only way before). It is an accessibility setting: `resources` and `privacy` never change it (rule 1 of the levels).
+- **Why shared and not per tool:** a person who needs less motion should say it once. Any tool that gains motion reads the same key.
+- **Not known:** which tools animate beyond pacreact. A text search found none in pacmenu, pacgreet, paclock, pacpeek and pacbar, and pacland was not read. Not tried by a person who needs it.
+- **Still open (register, item 2):** sticky, slow and bounce keys, and a magnifier, which are the compositor's and not started.
+- **When:** 2026-11-18
+
+## 2026-11-18: the compositor gets keyboard help and a magnifier
+
+- **Done, in pacland:** `sticky_keys`, `slow_keys`, `bounce_keys` (all off) and the `magnify in|out|off` actions with `magnifier_step` and `magnifier_max`. They are pacland's own settings, not shared keys of `pac.conf`: only a compositor can do them (they need to see every key and draw the whole screen), and the other tools get their effect without a setting. The reasons, the limits and what was tested are in `../pacland/docs/decisions.md`.
+- **Register:** item 2 now lists what is left (a screen reader, an on-screen keyboard); item 5 says pacland has no animation. Nothing was used by a person who needs it, and not on a real GPU, screen or keyboard.
+- **Asked of the author:** default keys for the magnifier (none are bound), and whether sticky keys should have a way to be switched on from the keyboard.
+- **When:** 2026-11-18

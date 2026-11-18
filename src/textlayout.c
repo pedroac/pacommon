@@ -300,6 +300,7 @@ static void reorder(Run *runs, int count) {
 
 bool pac_text_layout(const PacTextOptions *o, const char *utf8, PacTextLine *out) {
     out->count = 0;
+    out->chars = 0;
     out->width = 0;
     out->rtl = false;
     if (!o || !o->fallback || !utf8 || !utf8[0]) return false;
@@ -319,6 +320,7 @@ bool pac_text_layout(const PacTextOptions *o, const char *utf8, PacTextLine *out
         while (n > 1 && follows_letter(cps[n - 1])) n--;
         if (n > 1) n--;   /* the letter whose marks have no room */
     }
+    out->chars = (size_t)n;
 
     for (int i = 0; i < n; i++) {
         FT_Face face = NULL;
@@ -393,6 +395,10 @@ bool pac_text_layout(const PacTextOptions *o, const char *utf8, PacTextLine *out
                 glyph->glyph = info[g].codepoint;
                 glyph->x = pen + pos[g].x_offset / (double)shaper->upem;
                 glyph->y = -pos[g].y_offset / (double)shaper->upem;
+                glyph->pen = pen;
+                glyph->advance = pos[g].x_advance / (double)shaper->upem;
+                glyph->cluster = (uint16_t)(runs[r].start + (int)info[g].cluster);
+                glyph->level = (uint8_t)runs[r].level;
             }
             pen += pos[g].x_advance / (double)shaper->upem;
         }
@@ -414,6 +420,7 @@ bool pac_text_language_rtl(const char *lang) {
 
 bool pac_text_layout(const PacTextOptions *o, const char *utf8, PacTextLine *out) {
     out->count = 0;
+    out->chars = 0;
     out->width = 0;
     out->rtl = false;
     if (!o || !o->fallback || !utf8 || !utf8[0]) return false;
@@ -430,12 +437,53 @@ bool pac_text_layout(const PacTextOptions *o, const char *utf8, PacTextLine *out
         if (face->units_per_EM > 0 && FT_Load_Glyph(face, glyph, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING) == 0)
             advance = (double)face->glyph->metrics.horiAdvance / face->units_per_EM;
         if (out->count < PAC_TEXT_GLYPHS_MAX) {
-            out->glyphs[out->count++] = (PacTextGlyph){ face, glyph, pen, 0 };
+            out->glyphs[out->count++] = (PacTextGlyph){ face, glyph, pen, 0, pen, advance, (uint16_t)n, 0 };
         }
         pen += advance;
     }
+    out->chars = (size_t)n;
     out->width = pen;
     return true;
 }
 
 #endif /* NO_I18N */
+
+/* ---- the caret ---- */
+
+int pac_text_caret(const PacTextOptions *o, const char *utf8, size_t at, double *x_em) {
+    static PacTextLine line;
+    *x_em = 0;
+    if (!utf8 || !pac_text_layout(o, utf8, &line) || line.count == 0) return 0;
+
+    /* The character the caret sits next to: the one before it, or the first at the start of the text. */
+    size_t chars = 0, target = 0;
+    bool leading = true;
+    for (const char *p = utf8; *p && chars < line.chars; chars++) {
+        size_t here = (size_t)(p - utf8);
+        if (here >= at) break;
+        uint32_t cp;
+        p += decode(p, &cp);
+        target = chars;
+        leading = false;
+    }
+    if (leading) target = 0;
+
+    /* The cluster that has it: the last that starts at or before it (the characters of a run are in order). */
+    uint16_t start = 0;
+    for (size_t g = 0; g < line.count; g++)
+        if (line.glyphs[g].cluster <= target && line.glyphs[g].cluster >= start) start = line.glyphs[g].cluster;
+    double left = line.width, right = 0;
+    bool rtl = false;
+    for (size_t g = 0; g < line.count; g++) {
+        const PacTextGlyph *glyph = &line.glyphs[g];
+        if (glyph->cluster != start) continue;
+        if (glyph->pen < left) left = glyph->pen;
+        if (glyph->pen + glyph->advance > right) right = glyph->pen + glyph->advance;
+        rtl = glyph->level & 1;
+    }
+    if (left > right) return 0;                         /* no glyph for it (there were too many) */
+    /* After a character: where it ends as the text goes, its right side in a left-to-right run and its left side in a
+     * right-to-left one. At the start of the text: where the first begins, the other side. */
+    *x_em = leading ? (rtl ? right : left) : (rtl ? left : right);
+    return rtl ? -1 : 1;
+}
