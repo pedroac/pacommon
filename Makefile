@@ -16,7 +16,7 @@ ALL_CFLAGS := $(CFLAGS) $(GUARD_CFLAGS) -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -f
               -fstack-clash-protection $(CET_CFLAGS) -fPIE -MMD -MP -Isrc
 ALL_LDFLAGS := $(LDFLAGS) -Wl,--as-needed -pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack
 
-SRCS = $(addprefix src/,atomic_file.c config_file.c field.c fontfind.c language.c layout.c layout_detect.c layout_text.c length.c palette.c setting.c speech.c textinput.c utf8.c)
+SRCS = $(addprefix src/,atomic_file.c config_file.c daemon_value.c field.c fontfind.c language.c layout.c layout_detect.c layout_text.c length.c palette.c setting.c speech.c textinput.c utf8.c)
 OBJS = $(SRCS:src/%.c=build/%.o)
 
 # layout.c is also built with -DNO_I18N, as a tool built with I18N=0 gets it; only checked to compile.

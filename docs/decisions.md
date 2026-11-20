@@ -621,3 +621,18 @@ Open, found against the new principles and not changed:
 - **Register:** item 2 now lists what is left (a screen reader, an on-screen keyboard); item 5 says pacland has no animation. Nothing was used by a person who needs it, and not on a real GPU, screen or keyboard.
 - **Asked of the author:** default keys for the magnifier (none are bound), and whether sticky keys should have a way to be switched on from the keyboard.
 - **When:** 2026-11-18
+
+## 2026-11-20: Wayland first, X11 programs as a build option
+
+- **Changed:** principle 16 said "Wayland only. No X11". It now says Wayland first: the tools stay Wayland programs with no X11 backend, but a compositor (pacland) may run X11-only programs through Xwayland, chosen at build time (`XWAYLAND=1` default, `XWAYLAND=0` leaves it out, as principle 10 asks of optional features).
+- **Why:** the author's aim is Wayland only, for fewer resources; but some people need X11-only programs, and a desktop where they do not start is frustrating. The default favors working programs; the option favors the lean build. Xwayland itself starts only when an X11 program connects, so a session without one pays nothing at run time.
+- **Not changed:** the other tools (bars, greeters, lockers, ...) remain Wayland clients only; this is about compositors. Whoever adds X11 elsewhere must say why here.
+- **Details and what was tried:** pacland's `docs/decisions.md`, same date.
+- **When:** 2026-11-20
+
+## 2026-11-20: what a client of pacreactd reads out of a line
+
+- **Done:** `daemon_value.[ch]`: cut the attributes off a value (what follows its first TAB), read `name=word` out of them, and tell a device key (`NS.ID`, with nothing under it) from a property. pacbar and pacreact used byte-identical copies of the first two and each their own test of a device key.
+- **Why shared:** the line's grammar is written once (pacreactd's `docs/protocol.md`); a change to it (a quoting rule, a new kind of key) should be one change, not one per client. The list of namespaces stays each tool's own: they show different things.
+- **Cost:** two tools compile one small file; any other tool that talks to pacreactd gets the same reading for free.
+- **When:** 2026-11-20

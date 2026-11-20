@@ -10,7 +10,8 @@ can use and anyone can change.
   Speed work is measured. When smallness would cost reasonable convenience, convenience wins.
 - **Easy to build, change and test, and Wayland native** (10 to 17). Optional features are compiled
   out, what a person may want to change is in one header, Linux first and tried on more than Arch,
-  and Wayland only through the protocols the compositor offers.
+  and Wayland first, through the protocols the compositor offers (X11 only as an option of the
+  compositor, off the build when not wanted).
 - **Configuration that just works** (18 to 25). Every setting has a default and no file is
   required. Files are plain `key = value`, easy to read and to create, documented, shared where
   the tools share a setting, and themes are the same kind of file.
@@ -148,7 +149,7 @@ how.
 
 10. **Optional means optional.** A feature that adds a dependency or a noticeable amount of memory
     (speech, braille, SVG, avatars, translation, ...) is chosen when building, with a Makefile
-    variable such as `SPEECH=none`, `I18N=0` or `AVATAR=0`. Switched off, it is compiled out
+    variable such as `SPEECH=none`, `I18N=0`, `AVATAR=0` or `XWAYLAND=0`. Switched off, it is compiled out
     entirely: no code, no library, no linking. A build with every option off needs only the
     dependencies of principle 2. The build never turns a feature on because it happens to find a
     library: the same options give the same binary on every machine. The README lists each option
@@ -183,10 +184,16 @@ how.
 
 ## Wayland native
 
-16. **Wayland only**, through the protocols compositors already offer (`wlr-layer-shell`,
-    `ext-session-lock`, `xdg-shell`, ...). No X11. They should work well with wlroots-style
-    compositors and window managers such as Hyprland and sway, and pacland itself. A protocol a
-    compositor lacks is a missing feature, handled as in principle 43, not a reason to crash.
+16. **Wayland first**, through the protocols compositors already offer (`wlr-layer-shell`,
+    `ext-session-lock`, `xdg-shell`, ...). The tools are Wayland programs: none of them is an X11
+    client and none has an X11 backend. They should work well with wlroots-style compositors and
+    window managers such as Hyprland and sway, and pacland itself. A protocol a compositor lacks is
+    a missing feature, handled as in principle 43, not a reason to crash. The one exception is
+    compatibility in a compositor: pacland may run X11-only programs through Xwayland, because
+    people still need some. It is an optional feature (principle 10): `XWAYLAND=1` by default so
+    that those programs work, `XWAYLAND=0` for the leanest build, Wayland only, with no X11 code
+    and no `DISPLAY`. It is a layer for running old programs, never a way to write a tool.
+    Check: build with `XWAYLAND=0`, and `strings` finds no Xwayland code.
 17. **Simple presentation.** A plain, readable canvas. Theming is a simple `.conf` file of values
     (principle 22), not an engine and not a CSS-like language. No animations for their own sake, no
     scripting layers.

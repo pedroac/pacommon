@@ -1,6 +1,6 @@
 # Platform support
 
-pacommon targets **Linux, glibc or musl**, and is part of tools that are Wayland only. Linux
+pacommon targets **Linux, glibc or musl**, and is part of tools that are Wayland only (a compositor may run X11 programs through Xwayland, an option of its build). Linux
 comes first: nothing here has `#ifdef`s for other systems.
 
 ## What has been tested

@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 #include "atomic_file.h"
 #include "config_file.h"
+#include "daemon_value.h"
 #include "field.h"
 #include "fontfind.h"
 #include "language.h"
@@ -1564,6 +1565,32 @@ static void test_speech_announce(void) {
     speech_test_hooks(NULL, NULL);
 }
 
+static void test_daemon_value(void) {
+    char line[64], word[16];
+    snprintf(line, sizeof line, "Wacom level=critical\tkind=tablet\tmouse=yes");
+    char *attrs = daemon_split_attrs(line);                      /* what is in the name is only a name */
+    CHECK(attrs && !strcmp(line, "Wacom level=critical") && !strcmp(attrs, "kind=tablet\tmouse=yes"));
+    snprintf(line, sizeof line, "40");
+    CHECK(!daemon_split_attrs(line) && !strcmp(line, "40"));
+    snprintf(line, sizeof line, "\tkind=mouse");                 /* attributes only: a device with no name */
+    attrs = daemon_split_attrs(line);
+    CHECK(attrs && !line[0] && !strcmp(attrs, "kind=mouse"));
+
+    CHECK(daemon_attr("kind=tablet\tmouse=yes", "mouse", word, sizeof word) && !strcmp(word, "yes"));
+    CHECK(daemon_attr("kind=tablet\tmouse=yes", "kind", word, sizeof word) && !strcmp(word, "tablet"));
+    CHECK(!daemon_attr("kind=tablet", "mouse", word, sizeof word) && !word[0]);
+    CHECK(!daemon_attr(NULL, "kind", word, sizeof word) && !daemon_attr("", "kind", word, sizeof word));
+    CHECK(!daemon_attr("kindly=x", "kind", word, sizeof word) && !daemon_attr("kind", "kind", word, sizeof word));   /* not a prefix, not bare */
+    CHECK(daemon_attr("kind=storage-card-reader", "kind", word, 6) && !strcmp(word, "stora"));                       /* cut to fit */
+    CHECK(daemon_has_attr("level=warning\tcause=device", "cause", "device") && !daemon_has_attr("level=warning", "level", "crit"));
+    CHECK(!daemon_has_attr(NULL, "level", "warning"));
+
+    static const char *const spaces[] = { "usb", "input" };
+    CHECK(daemon_device_key("usb.u7", spaces, 2) && daemon_device_key("input.i1", spaces, 2));
+    CHECK(!daemon_device_key("usb.u7.size", spaces, 2) && !daemon_device_key("usb.", spaces, 2) && !daemon_device_key("usbx.u7", spaces, 2));
+    CHECK(!daemon_device_key("power.battery", spaces, 2) && !daemon_device_key("usb", spaces, 2));
+}
+
 int main(void) {
     snprintf(tmp, sizeof tmp, "/tmp/pacommon-test-XXXXXX");
     if (!mkdtemp(tmp)) { perror("mkdtemp"); return 2; }
@@ -1591,6 +1618,7 @@ int main(void) {
     test_palette();
     test_text_scale();
     test_length();
+    test_daemon_value();
     test_speech();
     test_speech_announce();
     test_field_preedit();
