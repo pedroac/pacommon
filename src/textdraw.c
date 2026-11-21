@@ -29,6 +29,11 @@ bool pac_font_init(void) {
     return ft || FT_Init_FreeType(&ft) == 0;
 }
 
+const char *const PAC_FONTS_REGULAR[] = { "AtkinsonHyperlegible-Regular.ttf", "NotoSans-Regular.ttf", "DejaVuSans.ttf",
+                                          "LiberationSans-Regular.ttf", NULL };
+const char *const PAC_FONTS_BOLD[] = { "AtkinsonHyperlegible-Bold.ttf", "NotoSans-Bold.ttf", "DejaVuSans-Bold.ttf",
+                                       "LiberationSans-Bold.ttf", NULL };
+
 cairo_font_face_t *pac_font_load(const char *path, const char *const *names, int index) {
     char found[256];
     if (!path || access(path, R_OK) != 0) {

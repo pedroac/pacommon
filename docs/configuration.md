@@ -65,7 +65,7 @@ tool.
 | `contrast` | `normal`, `high` | `normal` | High contrast: black and white, nothing dimmed |
 | `text_scale` | 0.5 to 2.5 | `1.0` | Size of all text, as a multiple of the default |
 | `text_size_min`, `text_size_max` | a number and a unit: `mm`, `in`, `pt`, `px` or `%` | none | The smallest and largest the tool's smallest text may be, such as `3mm` |
-| `font` | a font name | the tool's own | The font for text |
+| `font` | a font name | the tool's own: Atkinson Hyperlegible if installed (`ttf-atkinson-hyperlegible`), else Noto Sans, DejaVu Sans or Liberation Sans | The font for text |
 | `language` | a locale such as `pt_BR` | from `LANG` | Language of messages |
 | `icons` | `auto`, `theme`, `0` | the tool's own | The icon set |
 | `theme` | a name | the tool's own | The color scheme, for tools that have more than one |

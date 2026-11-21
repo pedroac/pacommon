@@ -636,3 +636,8 @@ Open, found against the new principles and not changed:
 - **Why shared:** the line's grammar is written once (pacreactd's `docs/protocol.md`); a change to it (a quoting rule, a new kind of key) should be one change, not one per client. The list of namespaces stays each tool's own: they show different things.
 - **Cost:** two tools compile one small file; any other tool that talks to pacreactd gets the same reading for free.
 - **When:** 2026-11-20
+
+- **Done:** `PAC_FONTS_REGULAR` and `PAC_FONTS_BOLD` in `textdraw`: the Latin fonts the tools try, Atkinson Hyperlegible first, then Noto Sans, DejaVu Sans and Liberation Sans.
+- **Why:** Atkinson Hyperlegible was made by the Braille Institute for people with low vision, with letters that are hard to mistake (I, l, 1; O, 0), which is what these tools are for. It is only preferred: a machine without it gets the next font, so nothing breaks. Written once so that every tool picks the same font. Package: `ttf-atkinson-hyperlegible` (Arch).
+- **Cost:** a tool that keeps its own list does not get it; the Latin face is wider than Noto Sans' by a little, so a line may be cut one letter earlier.
+- **When:** 2026-11-20

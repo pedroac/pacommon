@@ -34,6 +34,12 @@ void pac_font_finish(cairo_font_face_t *const *faces, size_t count);
  * font directories. NULL if there is none. The caller owns it: pass it to pac_font_finish. */
 cairo_font_face_t *pac_font_load(const char *path, const char *const *names, int index);
 
+/* The Latin fonts the tools prefer, for the `names` of pac_font_load, the best for reading first:
+ * Atkinson Hyperlegible (made for readability: its letters cannot be mistaken for one another),
+ * then Noto Sans, DejaVu Sans and Liberation Sans. Package: ttf-atkinson-hyperlegible (Arch). */
+extern const char *const PAC_FONTS_REGULAR[];
+extern const char *const PAC_FONTS_BOLD[];
+
 /* The face of a font file looked for by its name when first asked for, and remembered, a miss too
  * (searching the font directories is not free). NULL if there is none. Owned here: not to be destroyed. */
 cairo_font_face_t *pac_font_lazy(const char *file, int index);

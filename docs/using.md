@@ -180,7 +180,11 @@ font of each letter and draws them, the same way in every tool.
 
 1. `pac_font_init()`, then a face for the main font with `pac_font_load(path, names, index)` (the file at
    `path`, else the first of `names` found in the font directories; the caller owns it), set on the
-   Cairo context as usual (`cairo_set_font_face`, `cairo_set_font_size`).
+   Cairo context as usual (`cairo_set_font_face`, `cairo_set_font_size`). `PAC_FONTS_REGULAR` and
+   `PAC_FONTS_BOLD` are the names the tools prefer: Atkinson Hyperlegible first, made for readability,
+   then Noto Sans, DejaVu Sans and Liberation Sans. **Install `ttf-atkinson-hyperlegible`** (Arch; other
+   distributions call it `fonts-atkinson-hyperlegible` or `atkinson-hyperlegible-fonts`) for it; without it
+   the next one is used.
 2. `pac_font_set_language("ar")` for the shaping, the direction of a line with no letter that says it,
    and which of the Chinese, Japanese and Korean faces draws the ideographs.
 3. `pac_font_width`, `pac_font_show` (or `pac_font_text(cr, s, draw)`) measure and draw one line from the
