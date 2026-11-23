@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="pac_drop_zones_v1">
+  <copyright>
+    The pac tools. Private to them: pacland implements it, pacbar uses it.
+  </copyright>
+
+  <description summary="workspace buttons a window can be dropped on">
+    A panel with workspace buttons tells the compositor where they are. While the user drags a
+    window, the compositor highlights the button under the pointer and, on release over it, moves
+    the window to that workspace. The panel gets no events: the compositor does the hit-testing, so
+    nothing is exchanged while the pointer moves.
+  </description>
+
+  <interface name="pac_drop_zones_v1" version="1">
+    <description summary="creates the zones of a layer surface"/>
+
+    <enum name="error">
+      <entry name="not_layer_surface" value="0" summary="the surface is not a layer surface"/>
+      <entry name="already_constructed" value="1" summary="the layer surface already has zones"/>
+    </enum>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="get_zones">
+      <description summary="the zones of a layer surface">
+        A surface has at most one zones object. Its zones go away with it.
+      </description>
+      <arg name="id" type="new_id" interface="pac_drop_zones_surface_v1"/>
+      <arg name="surface" type="object" interface="wl_surface"/>
+    </request>
+  </interface>
+
+  <interface name="pac_drop_zones_surface_v1" version="1">
+    <description summary="the drop zones of one layer surface"/>
+
+    <enum name="error">
+      <entry name="invalid_workspace" value="0" summary="the workspace is not 1 to 10"/>
+      <entry name="invalid_size" value="1" summary="a width or height is negative"/>
+    </enum>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="set_zone">
+      <description summary="where the button of a workspace is">
+        The rectangle, in surface coordinates, where the button of a workspace (1 to 10, as in the
+        names ext-workspace gives them) is drawn. It replaces the earlier one for that workspace;
+        a width or height of 0 removes it. Dropping a window on the rectangle moves the window to
+        that workspace of the surface's output. Call it again when the button moves.
+      </description>
+      <arg name="workspace" type="uint"/>
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </request>
+
+    <request name="clear">
+      <description summary="remove every zone"/>
+    </request>
+  </interface>
+</protocol>

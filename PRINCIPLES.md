@@ -83,7 +83,9 @@ make sense, and the notes marked **pacommon** say how.
    in `docs/decisions.md` (measured, or a note that it was not), and `docs/apis.md` links to it.
 5. **Small footprint.** Low memory and a small binary, because these tools run all day on modest
    machines. `pacommon` is linked statically into each tool: its sources are compiled into each
-   binary, not a shared library, so the linker keeps only what a tool calls. The GUI code is in
+   binary, not a shared library, so the linker keeps only what a tool calls. (`PACOMMON_LINK=static`
+   or `shared` links `libpacommon` for the files that do not depend on the tool's configuration;
+   the default stays, and why is in `docs/library.md`.) The GUI code is in
    `pacommon` too, so a tool that opens no window links none of it. A tool is
    built with `-Os`, each function in its own section, and `--gc-sections` to drop what nothing
    calls. Each tool's docs state the binary size and the resident memory of an idle tool, and its
@@ -408,8 +410,9 @@ make sense, and the notes marked **pacommon** say how.
     warnings: they are fixed, not switched off. `make install` leaves the tool working out of the
     box: it installs the program and the configuration and assets it starts with. A file that is
     already there is the person's: it is kept, with a warning, and `make install REPLACE=1` replaces
-    it on purpose, saving the old one as `NAME.bak.DATE`. **pacommon:** nothing is installed, so it
-    has no `make install`.
+    it on purpose, saving the old one as `NAME.bak.DATE`. **pacommon:** nothing is installed by the
+    tools' `make install`; its own `make install-lib` installs `libpacommon` and its headers only for
+    someone who chose `PACOMMON_LINK=shared` or `static` (`docs/library.md`).
 50. **Tested without a display.** Logic that does not need Wayland (parsers, layout, text, colors,
     state) has unit tests run by `make test`, including the failure paths: the missing file, the
     full buffer, the malformed byte. A bug that is fixed gets a test that fails without the fix. A

@@ -77,3 +77,9 @@ bool font_find(const char *const *dirs, const char *const *names, char *path, si
     int n = snprintf(path, size, "%s", best_path);
     return n > 0 && n < (int)size;
 }
+
+const char *const PAC_FONTS_REGULAR[] = { "AtkinsonHyperlegible-Regular.ttf", "NotoSans-Regular.ttf", "DejaVuSans.ttf",
+                                          "LiberationSans-Regular.ttf", NULL };
+const char *const PAC_FONTS_BOLD[] = { "AtkinsonHyperlegible-Bold.ttf", "NotoSans-Bold.ttf", "DejaVuSans-Bold.ttf",
+                                       "LiberationSans-Bold.ttf", NULL };
+const char *const PAC_FONTS_LIGHT[] = { "AtkinsonHyperlegible-Regular.ttf", "NotoSans-Light.ttf", "DejaVuSans-ExtraLight.ttf", NULL };

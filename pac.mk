@@ -51,3 +51,25 @@ $(error SPEECH=$(SPEECH) is not supported: use none or speechd)
 endif
 PAC_SPEECH_CFLAGS = $(if $(filter speechd,$(SPEECH)),-DSPEECH_SPEECHD)
 PAC_SPEECH_PKGS = $(if $(filter speechd,$(SPEECH)),speech-dispatcher)
+
+# How a tool gets pacommon's code (docs/library.md): PACOMMON_LINK=source (default) compiles the files the tool lists
+# into the tool, with the tool's own flags; static links libpacommon.a; shared links libpacommon.so. The two
+# libraries have only the files that do not depend on how a tool is configured (LIB_SRCS in pacommon's Makefile), built
+# with the default tunables: a tool that sets its own, or needs a translated message from them, keeps `source`.
+# A tool using this: lists those files in PAC_LIB_SRCS, the rest in COMMON_SRCS, adds $(PAC_LIB_OBJS) to its objects
+# (empty for `source`: the files are in COMMON_SRCS) and $(PAC_LIB_LIBS) to its link line, and has $(PAC_LIB_DEP) as a
+# prerequisite of its program, and $(eval $(pac_lib_rule)) after its first target.
+PACOMMON_LINK ?= source
+ifeq ($(filter $(PACOMMON_LINK),source static shared),)
+$(error PACOMMON_LINK=$(PACOMMON_LINK) is not supported: use source, static or shared)
+endif
+PAC_LIB_LIBS = $(if $(filter static,$(PACOMMON_LINK)),$(PACOMMON)/build/libpacommon.a,$(if $(filter shared,$(PACOMMON_LINK)),-L$(PACOMMON)/build -Wl$(comma)-rpath$(comma)$(abspath $(PACOMMON))/build -lpacommon))
+comma := ,
+PAC_LIB_DEP = $(if $(filter source,$(PACOMMON_LINK)),,pacommon-lib)
+# Builds libpacommon. A rule, not a target written here, so that it does not become the first one of the Makefile that
+# includes this: the tool puts `$(pac_lib_rule)` after its own `all`.
+define pac_lib_rule
+pacommon-lib:
+	$$(MAKE) -C $$(PACOMMON) lib
+.PHONY: pacommon-lib
+endef

@@ -6,6 +6,24 @@ decided, why, and what else was considered.
 The entries marked "recorded from the code" were written down on 2026-11-15 from the code, its
 comments and `PRINCIPLES.md`. The author should confirm that the reasons are the real ones.
 
+## 2026-11-23: consistency pass, and pacommon stays source (`PACOMMON_LINK`)
+
+- **Decided:** shared what was copied between tools (Wayland protocol XML, `fcfont`, `icon_theme`, `paths`, `loop`, `cmdjob`,
+  the font lists); one way to find pacommon in every Makefile; the style written down (`style.md`); the audit and what is left
+  in `consistency.md`. pacommon can also be linked as `libpacommon.a` or `.so` (`PACOMMON_LINK=static|shared`), for the 11 files
+  that do not depend on a tool's configuration, and the default stays compiling the files into each tool.
+- **Why:** pacpaper had stopped building because its code was found in another tool's source tree; a protocol file copied ten times
+  can drift between a server and its clients; pacbar and pacpeek did not prefer the font the documents say every tool prefers.
+  A shared library is wrong for most of pacommon: the code is built per tool (its translation hook, `I18N`, `SPEECH`,
+  tunables that change the size of types), and the whole suite duplicates about 0.3 MB; measured on pacreactd, shared costs
+  0.6 ms (+30%) at start, static is 3% larger (built without the tool's `-Os`). Numbers and the rest in `library.md`.
+- **Considered:** a shared library for everything (rejected: 11 of the 27 source files are free of the tool's configuration; ABI promise;
+  the lock screen and greeter should not depend on a loaded file); a static library as the default (rejected: the linker already
+  keeps only what is called); merging pacauth's window and the four `avatar.c` (not done: needs a real session to check).
+- **Cost:** pacommon's `make install-lib` is new, which principle 49 now says. Translations of pacmenu's "rsvg-convert is not installed"
+  message changed to `%s: ...` in 30 `.po` files (the tool name is now a parameter); pacmenu's msgid is new, so a translator
+  should run `msgmerge` to check them.
+
 ## 2026-11-16: text layout in pacommon (`textlayout.[ch]`)
 
 - **Decided:** one module that lays out a line of text and says where a paragraph may break: shaping with HarfBuzz, the

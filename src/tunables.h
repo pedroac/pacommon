@@ -36,6 +36,26 @@
 #define LAYOUT_LIST_MAX (1 << 20)
 #endif
 
+/* ---- icon_theme ---- */
+
+/* Pictures kept: what is on the screen at once is about 40; the rest is room for scrolling. A tool
+ * that shows fewer sets less (pacout builds with -DICON_CACHE=64). */
+#ifndef ICON_CACHE
+#define ICON_CACHE 160
+#endif
+/* The most icons made from an SVG file in one frame, each by a run of rsvg-convert (about 15 ms):
+ * the rest come in the next frames, so that a window opens at once. */
+#ifndef ICON_SVG_PER_FRAME
+#define ICON_SVG_PER_FRAME 6
+#endif
+/* The longest a rsvg-convert run may take, in milliseconds, and the most it may write, in bytes. */
+#ifndef SVG_WAIT_MS
+#define SVG_WAIT_MS 1500
+#endif
+#ifndef SVG_OUT_MAX
+#define SVG_OUT_MAX (512 * 1024)
+#endif
+
 /* ---- config_file ---- */
 
 /* Where the system-wide settings are. A distribution that keeps them elsewhere sets this. */
@@ -220,5 +240,7 @@ _Static_assert(FIELD_PREEDIT_MAX >= 16 && FIELD_PREEDIT_MAX <= 4096 && PAC_TEXTI
                "the input method limits are out of range");
 _Static_assert(FONT_MAX_DIRS >= 1 && FONT_DIR_MAX >= 32 && FONT_PATH_MAX >= 32 && FONT_WALK_FDS >= 1,
                "the font search limits are too small");
+
+_Static_assert(ICON_CACHE >= 8, "ICON_CACHE too small");
 
 #endif

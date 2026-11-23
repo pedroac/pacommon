@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="pac_window_workspaces_v1">
+  <copyright>
+    The pac tools. Private to them: pacland implements it, pacbar uses it.
+  </copyright>
+
+  <description summary="the workspaces and the process of a window, and moving it">
+    Adds to a zwlr_foreign_toplevel_handle_v1 what that protocol lacks: the workspaces the window
+    belongs to, the process it belongs to, and a request to move it to another. The window's title, app id and output stay in
+    the foreign toplevel protocol. A panel showing the windows of each workspace uses this to place
+    them and to let the user drag one to another workspace.
+  </description>
+
+  <interface name="pac_window_workspaces_v1" version="2">
+    <description summary="creates window objects"/>
+
+    <enum name="error">
+      <entry name="too_many" value="0" summary="too many objects for one window"/>
+    </enum>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="get_window">
+      <description summary="the workspaces of a window">
+        A client may have a few objects for the same window. If the toplevel is already closed the
+        object is created and stays silent.
+      </description>
+      <arg name="id" type="new_id" interface="pac_window_workspaces_window_v1"/>
+      <arg name="toplevel" type="object" interface="zwlr_foreign_toplevel_handle_v1"/>
+    </request>
+  </interface>
+
+  <interface name="pac_window_workspaces_window_v1" version="2">
+    <description summary="the workspaces of one window"/>
+
+    <enum name="error">
+      <entry name="invalid_workspace" value="0" summary="the workspace is not 1 to 10"/>
+    </enum>
+
+    <event name="workspaces">
+      <description summary="the workspaces the window belongs to">
+        Bit n-1 is workspace n of the window's output. Sent when the object is created and each time
+        the set changes; at least one bit is set.
+      </description>
+      <arg name="mask" type="uint"/>
+    </event>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="move">
+      <description summary="move the window to a workspace">
+        The window now belongs to that workspace only (1 to 10), as the keyboard action
+        "move window to N", and the compositor keeps the focus consistent. Ignored when the window
+        is gone or the session is locked.
+      </description>
+      <arg name="workspace" type="uint"/>
+    </request>
+
+    <event name="pid" since="2">
+      <description summary="the process that owns the window">
+        The process id of the client that made the window (an X11 window: the process its client says it
+        is). Sent when the object is created, once, and only when it is known; a window of a client that
+        is gone, or one that the compositor cannot tell, has none. Windows of one program share it, so
+        it says which program, not which window; the program's helper processes have other ids.
+      </description>
+      <arg name="pid" type="uint"/>
+    </event>
+  </interface>
+</protocol>

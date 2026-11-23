@@ -16,7 +16,7 @@ ALL_CFLAGS := $(CFLAGS) $(GUARD_CFLAGS) -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -f
               -fstack-clash-protection $(CET_CFLAGS) -fPIE -MMD -MP -Isrc
 ALL_LDFLAGS := $(LDFLAGS) -Wl,--as-needed -pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack
 
-SRCS = $(addprefix src/,atomic_file.c config_file.c daemon_value.c field.c fontfind.c language.c layout.c layout_detect.c layout_text.c length.c palette.c setting.c speech.c textinput.c utf8.c)
+SRCS = $(addprefix src/,atomic_file.c cmdjob.c config_file.c daemon_value.c field.c fontfind.c language.c layout.c layout_detect.c layout_text.c length.c loop.c palette.c paths.c setting.c speech.c textinput.c utf8.c)
 OBJS = $(SRCS:src/%.c=build/%.o)
 
 # layout.c is also built with -DNO_I18N, as a tool built with I18N=0 gets it; only checked to compile.
@@ -132,9 +132,45 @@ ifeq ($(HAVE_DRAW),1)
 	./build/textdraw-test-plain-sanitize
 endif
 
+# ---- libpacommon: the same code as a library, for a tool that asks for it (PACOMMON_LINK=static or shared in its
+# Makefile, see docs/library.md). Only the files that do not depend on how a tool is configured: no translation hook
+# (-DPACOMMON_I18N), no I18N or SPEECH choice, no tool-defined symbol (app_name), no tunable that changes the size of a
+# type that is shared with the tool. They are built with the defaults of tunables.h, so a tool that changes one of them
+# links the files instead (the default).
+LIB_SRCS = atomic_file config_file daemon_value fontfind length loop palette paths setting utf8 cmdjob
+LIB_A = build/libpacommon.a
+LIB_SO = build/libpacommon.so.0
+LIB_PREFIX ?= /usr/local
+LIB_MAP = build/libpacommon.map
+
+lib: $(LIB_A) $(LIB_SO)
+
+build/pic/%.o: src/%.c | build/pic
+	$(CC) $(filter-out -fPIE,$(ALL_CFLAGS)) -fPIC -c $< -o $@
+
+build/pic:
+	mkdir -p build/pic
+
+$(LIB_A): $(LIB_SRCS:%=build/%.o)
+	ar rcsD $@ $^
+
+# Only the names the headers declare are exported (pac_*, font_*, atomic_*, daemon_*, loop_*, paths_*, job_*, utf8_*): nothing
+# else of the code can be called.
+$(LIB_SO): $(LIB_SRCS:%=build/pic/%.o)
+	printf '{ global: pac_*; font_*; atomic_*; daemon_*; loop_*; paths_*; job_*; utf8_*; PAC_*; local: *; };\n' > $(LIB_MAP)
+	$(CC) -shared -Wl,-soname,libpacommon.so.0 -Wl,--version-script=$(LIB_MAP) $(subst -pie,,$(ALL_LDFLAGS)) $^ -o $@ -lm
+	ln -sf libpacommon.so.0 build/libpacommon.so
+
+# The library and its headers, for a tool built with PACOMMON_LINK=shared or static.
+install-lib: lib
+	install -Dm644 $(LIB_A) $(DESTDIR)$(LIB_PREFIX)/lib/libpacommon.a
+	install -Dm755 $(LIB_SO) $(DESTDIR)$(LIB_PREFIX)/lib/libpacommon.so.0
+	ln -sf libpacommon.so.0 $(DESTDIR)$(LIB_PREFIX)/lib/libpacommon.so
+	for h in $(LIB_SRCS:%=src/%.h) src/tunables.h; do if [ -f $$h ]; then install -Dm644 $$h $(DESTDIR)$(LIB_PREFIX)/include/pacommon/$$(basename $$h); fi; done
+
 clean:
 	rm -rf build
 
 -include $(OBJS:.o=.d)
 
-.PHONY: all test sanitize clean
+.PHONY: all test sanitize clean lib install-lib

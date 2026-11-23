@@ -1,10 +1,11 @@
 # Using pacommon in a tool
 
 pacommon is source, not a library. A tool's `Makefile` compiles the files it calls and links the
-objects into its own binary, so the linker keeps only what is used.
+objects into its own binary, so the linker keeps only what is used. (`PACOMMON_LINK=static|shared` links
+`libpacommon` instead, for the files that do not depend on the tool's configuration: see [library.md](library.md).)
 
 ```make
-PACOMMON ?= ../pacommon
+PACOMMON ?= $(patsubst %/pac.mk,%,$(firstword $(wildcard pacommon/pac.mk ../pacommon/pac.mk)))
 CFLAGS   += -I$(PACOMMON)/src
 COMMON_SRCS = $(PACOMMON)/src/config_file.c $(PACOMMON)/src/fontfind.c
 COMMON_OBJS = $(COMMON_SRCS:$(PACOMMON)/src/%.c=build/pacommon_%.o)

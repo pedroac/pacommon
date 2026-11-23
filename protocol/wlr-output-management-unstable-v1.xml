@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The wlr-output-management-unstable-v1 protocol (version 2: what a settings window needs: the heads, their modes, position,
+     transform and scale, and one configuration applied at once). Written for paconf from the messages of the published protocol, in the
+     same order and with the same arguments, which is all the wire format depends on; the texts are shortened. The protocol is by the
+     wlroots authors, MIT license. -->
+<protocol name="wlr_output_management_unstable_v1">
+  <interface name="zwlr_output_manager_v1" version="2">
+    <description summary="output device configuration manager">
+      Reading what the outputs (heads) are and can do, and changing them by a configuration that is applied or refused as a whole.
+    </description>
+    <event name="head">
+      <arg name="head" type="new_id" interface="zwlr_output_head_v1"/>
+    </event>
+    <event name="done">
+      <arg name="serial" type="uint"/>
+    </event>
+    <request name="create_configuration">
+      <arg name="id" type="new_id" interface="zwlr_output_configuration_v1"/>
+      <arg name="serial" type="uint"/>
+    </request>
+    <request name="stop"/>
+    <event name="finished"/>
+  </interface>
+
+  <interface name="zwlr_output_head_v1" version="2">
+    <description summary="output device"/>
+    <event name="name">
+      <arg name="name" type="string"/>
+    </event>
+    <event name="description">
+      <arg name="description" type="string"/>
+    </event>
+    <event name="physical_size">
+      <arg name="width" type="int" summary="width in millimeters"/>
+      <arg name="height" type="int" summary="height in millimeters"/>
+    </event>
+    <event name="mode">
+      <arg name="mode" type="new_id" interface="zwlr_output_mode_v1"/>
+    </event>
+    <event name="enabled">
+      <arg name="enabled" type="int"/>
+    </event>
+    <event name="current_mode">
+      <arg name="mode" type="object" interface="zwlr_output_mode_v1"/>
+    </event>
+    <event name="position">
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+    </event>
+    <event name="transform">
+      <arg name="transform" type="int"/>
+    </event>
+    <event name="scale">
+      <arg name="scale" type="fixed"/>
+    </event>
+    <event name="finished"/>
+    <event name="make" since="2">
+      <arg name="make" type="string"/>
+    </event>
+    <event name="model" since="2">
+      <arg name="model" type="string"/>
+    </event>
+    <event name="serial_number" since="2">
+      <arg name="serial_number" type="string"/>
+    </event>
+  </interface>
+
+  <interface name="zwlr_output_mode_v1" version="2">
+    <description summary="output mode"/>
+    <event name="size">
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </event>
+    <event name="refresh">
+      <arg name="refresh" type="int" summary="vertical refresh rate in mHz"/>
+    </event>
+    <event name="preferred"/>
+    <event name="finished"/>
+  </interface>
+
+  <interface name="zwlr_output_configuration_v1" version="2">
+    <description summary="output configuration"/>
+    <request name="enable_head">
+      <arg name="id" type="new_id" interface="zwlr_output_configuration_head_v1"/>
+      <arg name="head" type="object" interface="zwlr_output_head_v1"/>
+    </request>
+    <request name="disable_head">
+      <arg name="head" type="object" interface="zwlr_output_head_v1"/>
+    </request>
+    <request name="apply"/>
+    <request name="test"/>
+    <event name="succeeded"/>
+    <event name="failed"/>
+    <event name="cancelled"/>
+    <request name="destroy" type="destructor"/>
+  </interface>
+
+  <interface name="zwlr_output_configuration_head_v1" version="2">
+    <description summary="head configuration"/>
+    <request name="set_mode">
+      <arg name="mode" type="object" interface="zwlr_output_mode_v1"/>
+    </request>
+    <request name="set_custom_mode">
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+      <arg name="refresh" type="int"/>
+    </request>
+    <request name="set_position">
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+    </request>
+    <request name="set_transform">
+      <arg name="transform" type="int"/>
+    </request>
+    <request name="set_scale">
+      <arg name="scale" type="fixed"/>
+    </request>
+  </interface>
+</protocol>

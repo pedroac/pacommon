@@ -2,8 +2,10 @@
 
 Code shared by the pac tools, and their common [principles](PRINCIPLES.md).
 
-Not a library to install: each tool's `Makefile` compiles the files it needs from `../pacommon`
- (change `PACOMMON` to put it elsewhere), so every tool stays one `make`.
+Not a library to install: each tool's `Makefile` compiles the files it needs from `./pacommon` (the submodule) or
+`../pacommon` (change `PACOMMON` to put it elsewhere), so every tool stays one `make`. A static or shared
+`libpacommon` exists for the files that do not depend on a tool's configuration (`PACOMMON_LINK`):
+[why the default stays source](docs/library.md).
 
 | File | What | Used by |
 | --- | --- | --- |
@@ -23,6 +25,12 @@ Not a library to install: each tool's `Makefile` compiles the files it needs fro
 | `src/textdraw.[ch]` | Draws and measures text with Cairo right in every script: finds the font of each letter (the main one, else the one of its script) and draws what `textlayout` shapes; fits a line with an ellipsis, cuts one to wrap it | pacgreet, paclock, pacmenu |
 | `src/utf8.[ch]` | Decodes one strictly valid UTF-8 sequence | pacpeek, pacreact |
 | `src/language.[ch]` | Sets the language of the texts whatever the environment says (`pac_set_language`) | pacgreet, paclock, pacpeek, pacreact |
+| `src/fcfont.[ch]` | Picks the text and symbol fonts through fontconfig (Nerd Fonts first), and the file of a family | pacmenu, pacout, pacolor |
+| `src/icon_theme.[ch]` | Freedesktop icons by name from the installed themes (PNG with Cairo, SVG by `rsvg-convert`) | pacmenu, pacout |
+| `src/paths.[ch]` | XDG data, config and state folders, the user folders, `$HOME`, as absolute paths only | pacmenu, pacout |
+| `src/loop.[ch]` | An epoll loop: sources register their fds and sleep until one fires | pacreact, pacreactd |
+| `src/cmdjob.[ch]` | Runs a command without a shell, in the C locale, and collects its output without blocking | paconf, pacpaper |
+| `protocol/*.xml` | The Wayland protocol files every tool generates its code from (layer-shell, foreign-toplevel, the pac ones) | all that open a window |
 | `src/atomic_file.[ch]` | Writes a file so that a crash never leaves half of it (`atomic_write`) | pacgreet, pacmenu |
 
 ## Build and test
@@ -39,6 +47,9 @@ Linux only, developed on Arch Linux: [what has been tested](docs/platform.md).
 ## More
 
 - [Using it in a tool](docs/using.md)
+- [Style: colors, fonts, sizes, and where the tools differ](docs/style.md)
+- [Consistency audit: what is shared, what is left](docs/consistency.md)
+- [As a library: static, shared or source](docs/library.md)
 - [Configuration: the file, shared keys, build options](docs/configuration.md)
 - [Accessibility checklist](docs/accessibility.md)
 - [Developing: rules, AI-assisted changes](docs/development.md)
