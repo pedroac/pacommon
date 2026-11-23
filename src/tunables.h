@@ -156,6 +156,47 @@
 
 /* ---- checks: a build with values that cannot work stops here ---- */
 
+/* ---- the windows (gui_kit, gui_win, gui_img) ---- */
+
+/* The size of the smallest text (the design size is SMALLEST_TEXT_PX), in millimetres on the screen: a real size,
+ * the same to read on every screen. Everything else (the rest of the text, the spacing, the window) keeps its
+ * proportion to it. text_scale multiplies it; text_size_min and text_size_max hold it between two sizes. */
+#ifndef UI_TEXT_MM
+#define UI_TEXT_MM 4.2
+#endif
+#define SMALLEST_TEXT_PX 13.0
+/* Where the screen does not say how large it is: everything is this much larger than its design size. */
+#ifndef UI_ZOOM
+#define UI_ZOOM 1.2
+#endif
+/* A message that says something went well (the green dot) is taken away after this long. */
+#ifndef OK_MESSAGE_MS
+#define OK_MESSAGE_MS 5000
+#endif
+#ifndef MAX_SCALE
+#define MAX_SCALE 8
+#endif
+#ifndef IMG_PIXELS_MAX
+#define IMG_PIXELS_MAX (100u * 1000 * 1000)   /* a JPEG or WebP with more pixels is not decoded (it would take 400 MB) */
+#endif
+/* The width of what a window shows. */
+/* The content of a window is a column in the middle, at most UI_MAX_W wide (design pixels): lines of text and rows that are a screen wide are hard to
+ * follow, with a label far from its value. A window that can lay its cards out in two columns (UI_TWO_COLUMNS_MIN: how wide the window must be for that)
+ * uses up to UI_MAX_W_WIDE. */
+#ifndef UI_MAX_W
+#define UI_MAX_W 860
+#endif
+#ifndef UI_MAX_W_WIDE
+#define UI_MAX_W_WIDE 1480
+#endif
+#ifndef UI_TWO_COLUMNS_MIN
+#define UI_TWO_COLUMNS_MIN 1240
+#endif
+/* The biggest picture file gui_img decodes, in bytes. */
+#ifndef IMG_FILE_MAX
+#define IMG_FILE_MAX (12 * 1024 * 1024)
+#endif
+
 _Static_assert(PAC_CONFIG_MAX_LINE >= 63 && PAC_CONFIG_MAX_LINE < PAC_CONFIG_MAX_SIZE,
                "PAC_CONFIG_MAX_LINE must hold a setting and be smaller than a file");
 _Static_assert(PAC_CONFIG_PATH_MAX >= 64, "PAC_CONFIG_PATH_MAX is too small for a path");

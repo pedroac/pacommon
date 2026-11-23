@@ -19,6 +19,7 @@ Not a library to install: each tool's `Makefile` compiles the files it needs fro
 | `src/palette.[ch]` | The colors every tool shares (normal and high contrast), with the checks of principle 33 | pacgreet, paclock |
 | `src/layout.[ch]`, `src/layout_detect.[ch]` | Keyboard layouts: the list xkeyboard-config has, `us(intl)` specs, the picker that searches and steps through them; and the layout the system says it has (`layout_detect`, for a greeter) | pacgreet, paclock |
 | `src/layout_text.[ch]` | The words of the layout picker, shown and said ("Type to search", "No keyboard matches", "Portuguese keyboard") | pacgreet, paclock |
+| `src/gui_kit.[ch]`, `gui_win.[ch]`, `gui_icons.[ch]`, `gui_img.[ch]` | The GUI layer: colors, text, buttons and clickable places, speech (`kit`); the Wayland window, pointer, keyboard and cursor (`win`); drawn icons; PNG, JPEG and WebP pictures. A tool that opens no window links none of it. The tool defines `app_name` and generates the protocol headers `gui_win.c` includes | paconf |
 | `src/textdraw.[ch]` | Draws and measures text with Cairo right in every script: finds the font of each letter (the main one, else the one of its script) and draws what `textlayout` shapes; fits a line with an ellipsis, cuts one to wrap it | pacgreet, paclock, pacmenu |
 | `src/utf8.[ch]` | Decodes one strictly valid UTF-8 sequence | pacpeek, pacreact |
 | `src/language.[ch]` | Sets the language of the texts whatever the environment says (`pac_set_language`) | pacgreet, paclock, pacpeek, pacreact |

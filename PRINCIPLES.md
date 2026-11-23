@@ -43,10 +43,9 @@ in the section it belongs to), and a principle that is dropped leaves its number
 ranges in the summary above are today's snapshot, not a rule: a section may later hold
 non-consecutive numbers.
 
-`pacommon` is not a tool: it is code compiled into the tools. The principles apply to it where
-they make sense, and the notes marked **pacommon** say how. A GUI library is not a tool either:
-the principles apply to it where they make sense, and the sentences that name a GUI library say
-how.
+`pacommon` is not a tool: it is code compiled into the tools, and it includes the GUI layer
+(window, drawing, widgets) that the windowed tools share. The principles apply to it where they
+make sense, and the notes marked **pacommon** say how.
 
 ## Small and fast
 
@@ -84,8 +83,8 @@ how.
    in `docs/decisions.md` (measured, or a note that it was not), and `docs/apis.md` links to it.
 5. **Small footprint.** Low memory and a small binary, because these tools run all day on modest
    machines. `pacommon` is linked statically into each tool: its sources are compiled into each
-   binary, not a shared library, so the linker keeps only what a tool calls. That is a rule about
-   `pacommon`, not about every library: a library that other programs link may be shared. A tool is
+   binary, not a shared library, so the linker keeps only what a tool calls. The GUI code is in
+   `pacommon` too, so a tool that opens no window links none of it. A tool is
    built with `-Os`, each function in its own section, and `--gc-sections` to drop what nothing
    calls. Each tool's docs state the binary size and the resident memory of an idle tool, and its
    README links to them, so that growth is noticed.
@@ -305,12 +304,12 @@ how.
     (libspeechd) or `SPEECH=atspi` (libatspi); `SPEECH=none` compiles it out, and that is the build
     for someone who does not need it. At most one backend is built. In the configuration, `speech =
     no` leaves the backend unloaded and unconnected. Everything spoken is also shown as text. A tool
-    built without speech still works fully with keyboard and pointer. A GUI library may provide this
-    layer (accessible roles, names and states, and the speech backend) so that every tool using it
-    gets it; the tool then configures it.
+    built without speech still works fully with keyboard and pointer. The GUI part of `pacommon`
+    provides this layer (accessible roles, names and states, and the speech backend) so that every
+    tool using it gets it; the tool then configures it.
 37. **Braille, optional.** A tool that prints builds with `BRAILLE=1` to translate text to braille
     with liblouis, and the configuration says which table (`braille_table`). `BRAILLE=0` compiles it
-    out and links nothing. A GUI library may provide the braille layer in the same way.
+    out and links nothing. The GUI part of `pacommon` provides the braille layer in the same way.
 38. **Translated.** All text a person sees or hears goes through gettext with English as the
     fallback; catalogs live in `po/`. A machine-written translation is marked `fuzzy` in its `.po`
     entry, and the catalog header says so, until a native speaker reviews it. A tool built with

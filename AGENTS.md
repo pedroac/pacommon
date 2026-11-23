@@ -95,6 +95,7 @@ src/              the source, all of it in this folder:
   utf8.[ch]         one UTF-8 character                  language.[ch]   the language of the texts
   atomic_file.[ch]  a file written whole or not at all
   textdraw.[ch]     text drawn right in every script (Cairo, over textlayout)
+  gui_*.[ch]        the GUI layer: kit (widgets, colors, speech), win (Wayland window), icons, img
   layout.[ch]       keyboard layouts and the picker      layout_detect.[ch]  the system's own layout
   layout_text.[ch]  the picker's words, shown and said
   tunables.h        sizes, limits, defaults

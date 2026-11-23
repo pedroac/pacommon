@@ -3,8 +3,8 @@
 How every pac tool is configured (principles 18 to 25). Each tool's own example `<tool>.conf` is
 the reference for its options; this page is for what they have in common.
 
-A GUI library may use the same file for user preferences (speech, text scale, palette, icon
-sources), but the application owns the file and passes the values to the library.
+The GUI part of `pacommon` may use the same file for user preferences (speech, text scale,
+palette, icon sources), but the application owns the file and passes the values to it.
 
 ## The file
 

@@ -47,9 +47,8 @@ greetd `config.toml` stays an example in the documentation folder. Try an instal
 Every tool builds with `-Os`, each function and datum in its own section, `-Wl,--gc-sections` to
 drop what nothing calls, `-Wl,--as-needed`, and `-s` to strip the symbol table (`make LDFLAGS=`
 keeps it for a debugger; `CFLAGS` and `LDFLAGS` are the user's to override). The warnings are
-`-Wall -Wextra -Wshadow -Wvla -Wformat-security`, and a warning is fixed, not switched off. Only
-pacgui uses CMake: its default build type is `MinSizeRel`, with the same section and linker
-options. `pacommon` is compiled into each tool statically, from source (the translated tools pass
+`-Wall -Wextra -Wshadow -Wvla -Wformat-security`, and a warning is fixed, not switched off.
+`pacommon` is compiled into each tool statically, from source (the translated tools pass
 their own `i18n.h` to `config_file.c`, so a prebuilt library could not serve them all).
 
 ## Guards
